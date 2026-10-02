@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SaiPa-data</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="brand-mark">S</span><span>SAIPA<b>DATA</b></span></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-view="ottelu">Ottelu</button>
+    <button class="tab" data-view="kausi">Kausi</button>
+    <button class="tab" data-view="historia">Historia</button>
+    <button class="tab" data-view="info">Mittarit</button>
+  </nav>
+</header>
+
+<main>
+  <section id="view-ottelu" class="view active">
+    <div class="picker">
+      <label for="gameSelect">Ottelu</label>
+      <select id="gameSelect"></select>
+    </div>
+    <div id="gameContent"><p class="loading">Ladataan otteluita…</p></div>
+  </section>
+
+  <section id="view-kausi" class="view">
+    <div id="seasonContent"><p class="loading">Lasketaan kauden lukuja…</p></div>
+  </section>
+
+  <section id="view-historia" class="view">
+    <div id="historyContent"><p class="loading">Ladataan historiaa…</p></div>
+  </section>
+
+  <section id="view-pelaaja" class="view">
+    <button class="backlink" onclick="history.length > 1 ? history.back() : show('kausi')">← Takaisin</button>
+    <div id="playerContent"></div>
+  </section>
+
+  <section id="view-info" class="view">
+    <div class="card prose">
+      <h2>Miten luvut lasketaan</h2>
+      <p class="muted">Data: liiga.fi:n rajapinta. Kaikki luvut lasketaan selaimessa joka latauksella. Epävirallinen fanisivu.</p>
+
+      <h3>Lyhenteet</h3>
+      <p>Taulukoissa käytetään NHL-tyylisiä lyhenteitä. Otsikon päällä hover näyttää lyhenteen englanniksi ja selityksen suomeksi.</p>
+      <div class="tablewrap"><table class="mini gloss">
+        <tr><th>Lyhenne</th><th>Englanniksi</th><th>Selitys</th></tr>
+        <tr><td>GP · TOI</td><td>Games Played · Time on Ice</td><td>Ottelut · peliaika</td></tr>
+        <tr><td>G · A · P</td><td>Goals · Assists · Points</td><td>Maalit · syötöt · pisteet</td></tr>
+        <tr><td>A1 · A2 · P1</td><td>Primary / Secondary Assists · Primary Points</td><td>Ykkössyöttö · kakkossyöttö · maalit + ykkössyötöt</td></tr>
+        <tr><td>PPG · SHG · PPA · SHA</td><td>Power Play / Short-Handed Goals / Assists</td><td>Yli- ja alivoimamaalit ja -syötöt</td></tr>
+        <tr><td>ENG · GWG</td><td>Empty Net / Game-Winning Goals</td><td>Tyhjiin tehdyt maalit · voittomaalit</td></tr>
+        <tr><td>+/- · + · −</td><td>Plus/Minus</td><td>Maaliero pelaajan ollessa jäällä, ei ylivoimamaaleja</td></tr>
+        <tr><td>iCF · SOG · MS · SB</td><td>Shot Attempts · Shots on Goal · Missed · Shots Blocked</td><td>Laukausyritykset · maalia kohti · ohi · vastustajan blokkaamat</td></tr>
+        <tr><td>SH%</td><td>Shooting Percentage</td><td>Maalit / laukaukset maalia kohti (ohi menneet ja blokatut eivät ole mukana)</td></tr>
+        <tr><td>xG · G−xG</td><td>Expected Goals</td><td>Maaliodottama ja maalit sen yli tai alle</td></tr>
+        <tr><td>CF% · CF% Rel</td><td>Corsi For %</td><td>Oman joukkueen osuus tasakentin laukausyrityksistä pelaajan ollessa jäällä · sama verrattuna aikaan, kun pelaaja on vaihdossa</td></tr>
+        <tr><td>xGF% · xGF% Rel</td><td>Expected Goals For %</td><td>Sama maaliodottamalla, kaikki pelitilanteet</td></tr>
+        <tr><td>IPP</td><td>Individual Points Percentage</td><td>Kuinka monessa tasakentin maalissa pelaaja oli pisteillä mukana, kun hän oli jäällä</td></tr>
+        <tr><td>OZS · DZS · OZS%</td><td>Offensive / Defensive Zone Starts</td><td>Hyökkäys- ja puolustuspään aloitukset tasakentin pelaajan ollessa jäällä</td></tr>
+        <tr><td>FO · FOW · FO%</td><td>Faceoffs</td><td>Aloitukset, voitot ja voittoprosentti, myös alueittain</td></tr>
+        <tr><td>Att · Cmp · Cmp%</td><td>Pass Attempts · Completed</td><td>Syötöt: yritykset, onnistuneet, prosentti (myös paineen ja kovan paineen alla)</td></tr>
+        <tr><td>SA · SV · GA · SV% · GAA</td><td>Shots Against · Saves · Goals Against</td><td>Maalivahdin laukaukset, torjunnat, päästetyt, torjuntaprosentti, päästetyt / 60 min</td></tr>
+        <tr><td>xGA · GSAx</td><td>Expected Goals Against · Goals Saved Above Expected</td><td>Päästetty maaliodottama · xGA − päästetyt. Lasketaan kaikista laukausyrityksistä ja erikseen vain maalia kohti tulleista.</td></tr>
+        <tr><td>QS · QS%</td><td>Quality Starts</td><td>Aloitukset, joissa SV% oli vähintään liigan keskiarvo, tai vähintään 88,5 %, kun laukauksia oli enintään 20</td></tr>
+        <tr><td>EV · PP · SH · HD</td><td>Even Strength · Power Play · Short-Handed · High-Danger</td><td>Tasakentin · ylivoima · alivoima · maalin edusta</td></tr>
+        <tr><td>/60 · /GP</td><td>per 60 minutes · per game</td><td>Suhteutettuna peliaikaan tai otteluihin</td></tr>
+      </table></div>
+
+      <h3>Pelipisteet (GS)</h3>
+      <p>Game Score -malli, sovitettu Liigan dataan. Pelaajan teot lasketaan yhteen painotettuina, eikä tulosta jaeta peliajalla. Ottelun ja erän tähdet valitaan tällä.</p>
+      <table class="mini">
+        <tr><th>Osa-alue</th><th>Mittari</th><th>Paino</th></tr>
+        <tr><td>Tulos</td><td>Maali / ykkössyöttö / kakkossyöttö</td><td>0,75 / 0,70 / 0,55</td></tr>
+        <tr><td>Tuotanto</td><td>Laukaus maalia kohti / oma xG</td><td>0,075 / 0,5</td></tr>
+        <tr><td>Hallinta</td><td>Corsi ± / maaliero kentällä (tasakentin)</td><td>0,05 / 0,15</td></tr>
+        <tr><td>Puolustus</td><td>Blokki</td><td>0,05</td></tr>
+        <tr><td>Muut</td><td>Aloitus voitettu / hävitty, jäähy 2 min</td><td>+0,01 / −0,01, −0,15</td></tr>
+      </table>
+      <p><b>Maalivahti:</b> 0,75 × GSAx + 0,02 × torjunnat.</p>
+
+      <h3>Nostot</h3>
+      <p>Ennakon avainpelaajissa ja kauden nostoissa on samat säännöt. Hover kertoo säännön ja kärkikolmikon.</p>
+      <table class="mini">
+        <tr><th>Nosto</th><th>Sääntö</th></tr>
+        <tr><td>⭐ Kauden kovin</td><td>Eniten pelipisteitä ottelua kohden, vähintään 3 ottelua (vain kausi)</td></tr>
+        <tr><td>🏆 Kultakypärä</td><td>Eniten pisteitä</td></tr>
+        <tr><td>🔥 Kuumin juuri nyt</td><td>Eniten pisteitä viidessä viime ottelussa, vähintään 2</td></tr>
+        <tr><td>📈 Maalit vielä tulossa</td><td>Eniten maaleja alle maaliodottaman (G − xG enintään −0,5)</td></tr>
+        <tr><td>🎯 Viimeistelee yli odotusten</td><td>Eniten maaleja yli maaliodottaman (vähintään +1)</td></tr>
+        <tr><td>⚡ Isoin maaliuhka</td><td>Eniten maaliodottamaa omista laukauksista (vähintään 1)</td></tr>
+        <tr><td>🥶 Kylmä putki</td><td>Pisin meneillään oleva putki ilman pisteitä (vähintään 3), joukkueen 9 eniten pelaavan joukosta</td></tr>
+        <tr><td>🧤 Maalivahti</td><td>Eniten GSAx:ää (vain kausi)</td></tr>
+      </table>
+      <p>Ennakossa sama pelaaja on vain yhdessä kortissa. Jos kärki on jo aiemmassa kortissa, näytetään seuraava, ja kortissa lukee "joukkueen N.". Kauden nostoissa jokaisessa laatassa on aina kategorian kärki.</p>
+
+      <h3>Laukauskartta ja alueet</h3>
+      <p>Koordinaatit käännetään niin, että hyökkäyssuunta on aina sama. <b>Maalin edusta</b> on enintään 10 m maaliviivasta ja 5 m sivuun maalin keskeltä. <b>Laidat</b> ovat sen sivuilla, <b>siniviiva</b> yli 12 m:n päässä (maalivahtitilastoissa yli 14 m) ja <b>maalin takaa</b> maaliviivan takana. Rajat ovat likimääräisiä, koska Liiga ei julkaise kartan mittakaavaa.</p>
+      <p>Liiga ei julkaise laukauskarttaa jokaisesta ottelusta. Siksi karttaan perustuvat luvut (Mistä maalit syntyvät, maalivahtien alueittaiset torjuntaprosentit, MS ja SB) voivat olla pienempiä kuin viralliset tilastot. Kartan kattavuus kerrotaan aina luvun vieressä.</p>
+      <p><b>Liigasta poikkeaa</b> nimeää alueen, jonka osuus joukkueen maaleista poikkeaa selvimmin liigan osuudesta.</p>
+
+      <h3>Odotetut pisteet (xPTS)</h3>
+      <p>Liigan oma odotettujen pisteiden kenttä on tyhjä, joten ne lasketaan itse. Kummankin joukkueen maalimäärää mallinnetaan Poisson-jakaumalla, jonka keskiarvo on joukkueen xG ottelussa. Varsinaisen peliajan voitto tuo 3 pistettä ja tasapeli 1,5 pistettä kummallekin. Näistä lasketaan sarjataulukko maalipaikkojen mukaan.</p>
+
+      <h3>Ennuste</h3>
+      <p>Jokaiselle joukkueelle lasketaan hyökkäys- ja puolustusvoima, puoliksi maaleista ja puoliksi xG:stä. Kauden alussa voimia vedetään kohti viime kauden tasoa ja liigan keskiarvoa (puolet painosta kauden omille otteluille 10 ottelun jälkeen). Odotetut maalit = oma hyökkäys × vastustajan puolustus / liigan keskiarvo × kotietu. Poisson-jakauma antaa tulosten todennäköisyydet, ja tasapelien osuutta korotetaan. Malli valittiin kauden 2024–25 otteluilla ja testattiin kauden 2025–26 otteluilla.</p>
+
+      <h3>Muut</h3>
+      <p><b>Pelitilanne</b> (johdossa, tasan, tappiolla) lasketaan maalien ajankohdista. Laukaus kuuluu siihen tilanteeseen, joka oli voimassa juuri ennen sitä.</p>
+      <p><b>Ketjut ja parit</b> perustuvat ottelun viralliseen kokoonpanoon ja tasakentin maaleihin. Liiga ei julkaise ketjujen peliaikoja.</p>
+      <p><b>Persentiilit</b> pelaajasivulla vertaavat saman pelipaikan pelaajiin, joilla on vähintään 3 ottelua ja 8 minuuttia peliaikaa ottelussa.</p>
+      <p><b>Hylätyt maalit</b> ja voittolaukauskilpailun maalit eivät ole mukana maaleissa eivätkä syötöissä.</p>
+      <p><b>Otoskoko:</b> alle 10 ottelun luvut ovat alustavia. Maaliprosentit vakiintuvat hitaasti, laukaukset ja xG nopeammin.</p>
+      <p><b>Täsmäytys:</b> kausinäkymän alalaidassa luvut verrataan automaattisesti liiga.fi:n virallisiin kausitilastoihin.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">Data liiga.fi · Epävirallinen fanisivu · <span id="updated"></span></footer>
+<script src="app.js"></script>
+<script src="report.js"></script>
+<script src="shots.js"></script>
+<script src="player.js"></script>
+<script src="forecast.js"></script>
+<script src="insights.js"></script>
+<script src="data/saipa-alltime.js"></script>
+<script src="history.js"></script>
+<script src="preview.js"></script>
+<script src="live.js"></script>  <!-- optional live view: delete this line and live.js to remove -->
+</body>
+</html>
