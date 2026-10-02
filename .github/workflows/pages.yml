@@ -1,0 +1,43 @@
+# Publishes the site to GitHub Pages on every push to main.
+# Before publishing it stamps the commit id into the ?v= of every script and stylesheet in index.html,
+# so browsers always load the new files together after a release (no manual version bumps).
+# One-time setup: repository Settings -> Pages -> Source: "GitHub Actions".
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp version into asset links
+        run: |
+          V="${GITHUB_SHA::7}"
+          sed -i -E "s/\?v=[A-Za-z0-9]+\"/?v=${V}\"/g" index.html
+          grep -c "?v=${V}" index.html
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp -r index.html *.js styles.css data _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

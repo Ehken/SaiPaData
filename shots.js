@@ -401,7 +401,7 @@ function deservedHtmlSeason(rows) {
   if (!rows.length) return '<p class="muted">Odotettuja maaleja ei vielä ole saatavilla.</p>';
   const s = rows.find(t => t.id === SAIPA_NUM);
   const maxAbs = Math.max(1, ...rows.map(t => Math.abs(t.diff)));
-  const th = (l, en, fi, cls = '') => `<th${cls ? ` class="${cls}"` : ''} data-tip="${l} = ${en}\n${fi}">${l}</th>`;
+  const th = (l, en, fi, cls = '') => `<th${cls ? ` class="${cls}"` : ''} data-tip="${en}\n${fi}">${l}</th>`;
   return `
     ${s ? `<div class="chips"><span class="chip"><small>SaiPa</small><b>${s.rank}.</b></span><span class="chip"><small>xRank</small><b>${s.xrank}.</b></span><span class="chip"><small>PTS − xPTS</small><b class="${cls(s.diff)}">${signed(s.diff, 1)}</b></span></div>` : ''}
     <div class="tablewrap"><table class="dsv">
@@ -456,7 +456,7 @@ function stateSplits(raws) {
 function stateHtml(x) {
   const share = (a, b) => (a + b) ? a / (a + b) : null;
   const bar = v => v == null ? '' : `<div class="sh-bar"><i style="width:${v * 100}%"></i><b style="left:50%"></b></div>`;
-  const th = (l, en, fi) => `<th data-tip="${l} = ${en}\n${fi}">${l}</th>`;
+  const th = (l, en, fi) => `<th data-tip="${en}\n${fi}">${l}</th>`;
   const states = Object.keys(x.ST).map(k => ({ k, l: x.ST[k], ...x.S[k], cfp: share(x.S[k].cf, x.S[k].ca) }));
   const pers = x.P.map(p => ({ ...p, xgp: share(p.xgf, p.xga) }));
   return `

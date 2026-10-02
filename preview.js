@@ -607,7 +607,7 @@ function goaliesBlock(t, sum, games, nextGame, next) {
   }
   return `<div>
     <div class="form-h">${logoImg(t)}<b>${esc(t.name)}</b>${confirmed ? `<span class="badge b-hot">Aloittaa: ${esc(confirmed)}</span>` : '<span class="muted">Aloittaja vahvistuu kokoonpanon julkaisun yhteydessä</span>'}</div>
-    <div class="tablewrap"><table class="data compact"><thead><tr><th>Maalivahti</th><th>Aloitukset</th><th data-tip="SV% = Save Percentage\nTorjuntaprosentti">SV%</th><th data-tip="GSAx = Goals Saved Above Expected\nxGA − päästetyt maalit">GSAx</th><th data-tip="GSAx L3 = GSAx, Last 3 Games\nKolme viimeisintä ottelua">GSAx L3</th></tr></thead>
+    <div class="tablewrap"><table class="data compact"><thead><tr><th>Maalivahti</th><th>Aloitukset</th><th data-tip="Save Percentage\nTorjuntaprosentti">SV%</th><th data-tip="Goals Saved Above Expected\nxGA − päästetyt maalit">GSAx</th><th data-tip="GSAx, Last 3 Games\nKolme viimeisintä ottelua">GSAx L3</th></tr></thead>
     <tbody>${gks.map(g => `<tr><td>${esc(g.first)} ${esc(g.last)}</td><td>${g.starts}${g.gp > g.starts ? ` <span class="muted">(+${g.gp - g.starts})</span>` : ''}</td><td>${pct(g.sv, 1)}</td><td class="${cls(g.gsax)}"><b>${signed(g.gsax, 2)}</b></td><td class="${cls(g.l3)}">${signed(g.l3, 2)}</td></tr>`).join('')}</tbody></table></div>
     <div class="k st-k">Aloittajat, 5 viimeisintä ottelua</div>
     <div class="st-strip">${recent.map(g => `<div class="st" data-tip="${esc(`${fiDate(g.start)} ${g.home ? 'vs' : '@'} ${g.opp.name}\nAloitti\t${nameOfFull(sum, g.starter)}`)}"><small>${fiDate(g.start)} ${g.home ? '' : '@'}${esc(shortName(g.opp.name))}</small><b>${esc(last(g.starter))}</b></div>`).join('')}</div>

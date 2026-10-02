@@ -834,8 +834,9 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .wp-area { fill: var(--yellow); opacity: .25; }
 .wp-g { fill: #6f6f6a; stroke: #fff; stroke-width: 1.5; } .wp-g.s { fill: var(--yellow); stroke: var(--ink); }
 .wp-p { fill: #9a9a94; } .wp-p.s { fill: #e0a800; }
-.lv-bars { display: flex; align-items: flex-end; gap: 4px; height: 30px; margin: 2px 0 4px; }
-.lv-bars i { flex: 1; background: #d9d9d4; border-radius: 3px 3px 0 0; } .lv-bars i.s { background: var(--yellow); } .lv-bars i.o { background: #6f6f6a; }
+/* Pressure: one equal block per minute; colour = who had more attempts that minute (counts in the hover) */
+.lv-bars { display: flex; align-items: stretch; gap: 4px; height: 16px; margin: 6px 0 6px; }
+.lv-bars i { flex: 1; background: #d9d9d4; border-radius: 3px; } .lv-bars i.s { background: var(--yellow); } .lv-bars i.o { background: #6f6f6a; }
 .lv-feed { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .lv-feed li { display: flex; gap: 12px; padding: 8px 12px; border-radius: 8px; background: #f6f6f2; border-left: 4px solid #c9c9c3; font-size: 14px; }
 .lv-feed li.pos { border-left-color: var(--good); } .lv-feed li.neg { border-left-color: var(--bad); }
@@ -849,3 +850,104 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .lv-replay { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--ink); color: #fff; padding: 8px 12px; border-radius: 10px; margin-bottom: 10px; }
 .lv-replay input { flex: 1; min-width: 160px; accent-color: var(--yellow); } .lv-replay small { width: 100%; color: rgba(255,255,255,.6); }
 .lv-replay .sbtn { background: #2a2a28; color: #fff; border-color: #444; }
+/* Live: transient states (power play, intermission, fresh goal, attempt run) live in the sticky header, not in the tiles */
+.lv-now { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.lv-now-i { position: relative; overflow: hidden; display: flex; align-items: baseline; gap: 10px; padding: 7px 12px 9px; border-radius: 999px; font-size: 14px; background: #f1f3f6; border: 1px solid #dfe3ea; }
+.lv-head .lv-now-i span { color: inherit; font-size: 14px; }
+.lv-now-i b { font-family: "Barlow Condensed", Inter, sans-serif; font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.lv-now-i.pos { background: #e7f6ec; border-color: #b9e3c7; color: #146c34; }
+.lv-now-i.neg { background: #fdeceb; border-color: #f3c3bf; color: #a3241b; }
+.lv-now-i.mid { background: #fff6dc; border-color: #f1dc9c; color: #7a5a00; }
+.lv-now-i .lv-cd { font-variant-numeric: tabular-nums; font-weight: 700; }
+.lv-now-i i { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; opacity: .55; }
+/* Live: finished periods table */
+.lv-ptab { border-collapse: collapse; width: 100%; max-width: 620px; font-variant-numeric: tabular-nums; }
+.lv-ptab th, .lv-ptab td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e6e8ee; white-space: nowrap; }
+.lv-ptab thead th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.lv-ptab tbody th { font-weight: 700; }
+.lv-ptab td { font-family: "Barlow Condensed", Inter, sans-serif; font-size: 22px; font-weight: 800; }
+.lv-ptab td.lv-star { font-size: 20px; }
+.lv-ptab tr.on th, .lv-ptab tr.on td { background: rgba(255, 210, 0, .28); }
+.lv-brk.on .lv-ptab th, .lv-brk.on .lv-ptab td { border-color: rgba(0,0,0,.08); }
+.lv-ptab td[data-tip] { border: 0; border-bottom: 1px solid #e6e8ee; border-radius: 0; box-shadow: none; background: none; }
+/* Live: five permanent tiles, laid out so every row is full: 5 / 3+2 / 1+2+2 */
+.tiles.lv-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.lv-tiles .tile { min-width: 0; }
+.lv-tiles .k { hyphens: manual; overflow-wrap: normal; }
+@media (max-width: 1180px) {
+  .tiles.lv-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .lv-tiles .tile { grid-column: span 2; }
+  .lv-tiles .tile:nth-child(n+4) { grid-column: span 3; }
+}
+@media (max-width: 760px) {
+  .tiles.lv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lv-tiles .tile, .lv-tiles .tile:nth-child(n+4) { grid-column: span 1; }
+  .lv-tiles .tile:first-child { grid-column: span 2; }
+}
+.lv-feed li.goal { font-weight: 600; }
+.lv-tiles .k { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
+.lv-tiles .v { white-space: nowrap; }
+@media (max-width: 760px) { .lv-tiles .v { font-size: 34px; } .lv-tiles .tile:first-child .v { font-size: 44px; } }
+@media (max-width: 480px) { .lv-tiles .tile:not(:first-child) .t-ic { display: none; } .lv-tiles .k { font-size: 11px; } }
+/* Live: the score header is one solid sticky bar (score + clock + transient strip); the replay bar scrolls away */
+.lv-replay { position: static; }
+.lv-head { margin: -14px -16px 12px; padding: 10px 16px; border-radius: 10px 10px 0 0; border-bottom: 1px solid var(--line); box-shadow: 0 6px 12px -10px rgba(0,0,0,.35); }
+.lv-head .lv-now { padding-bottom: 2px; }
+.lv-now { min-height: 44px; align-items: center; }
+/* Live: ice time, defence and forwards apart, each bar split by period */
+.lv-ices { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 32px; max-width: none; }
+.lv-ice-g { display: grid; gap: 7px; align-content: start; }
+.lv-ice-g h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.lv-ice { grid-template-columns: 110px 1fr 48px; gap: 10px; font-size: 14px; }
+.lv-ice-bar { display: flex; gap: 2px; height: 12px; min-width: 4px; }
+.lv-ice-bar i, .lv-ice-leg i { border-radius: 2px; height: 12px; }
+.lv-ice .p1, .lv-ice-leg .p1 { background: #8a6d00; } .lv-ice .p2, .lv-ice-leg .p2 { background: #d4a800; }
+.lv-ice .p3, .lv-ice-leg .p3 { background: #f5d64a; } .lv-ice .p4, .lv-ice-leg .p4 { background: #fbe9a0; }
+.lv-ice .p0 { background: repeating-linear-gradient(45deg, #e8e4d4 0 3px, #f6f3e8 3px 6px); }
+.lv-ice i.now { box-shadow: inset 0 0 0 1.5px #111; }
+.lv-ice-leg { margin: 0 0 8px; } .lv-ice-leg i { display: inline-block; width: 14px; vertical-align: middle; margin-right: 4px; }
+.lv-ptab { max-width: 980px; }
+.lv-ptab td small { font-family: Inter, sans-serif; font-size: 11px; font-weight: 600; color: var(--muted); }
+.lv-ptab tr.tot th, .lv-ptab tr.tot td { border-top: 2px solid #cfd3db; color: #444; }
+/* Live: event history button + popover in the sticky header (replaces the separate "Huomiot" list) */
+.lv-head { position: sticky; }
+.lv-hist { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font: 600 13px Inter, sans-serif; color: var(--ink); cursor: pointer; position: relative; }
+.lv-hist:hover, .lv-hist.on { background: #f3f4f6; }
+.lv-hist .n { font-variant-numeric: tabular-nums; background: #eceef2; border-radius: 999px; padding: 0 7px; font-size: 12px; }
+.lv-hist .dot { position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%; background: #e53935; border: 2px solid #fff; }
+.lv-pop { position: absolute; right: 12px; top: calc(100% - 4px); width: min(520px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 34px -12px rgba(0,0,0,.35); padding: 10px 12px; z-index: 20; }
+.lv-pop-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.lv-pop-h b { font-family: "Barlow Condensed", Inter, sans-serif; font-size: 18px; }
+.lv-pop .lv-feed { margin: 0; }
+.lv-head .lv-pop span { color: inherit; font-size: 14px; }
+.lv-head .lv-pop li > span:first-child { color: var(--muted); }
+.lv-head .lv-pop li b { font-family: inherit; font-size: inherit; font-weight: 700; }
+.lv-head .lv-pop li .muted { color: var(--muted); }
+/* Event list: fixed time column (period label above, clock below) so every row lines up */
+.lv-feed li { align-items: flex-start; }
+.lv-feed li .lv-ft { flex: 0 0 64px; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.lv-feed li .lv-ft small { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.lv-feed li .lv-ft b { font: 700 15px Inter, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink); }
+.lv-feed li .lv-fx { flex: 1; min-width: 0; color: var(--ink); line-height: 1.35; padding-top: 1px; }
+.lv-head .lv-pop li .lv-ft b { font-size: 15px; font-family: Inter, sans-serif; }
+.lv-head .lv-pop li .lv-ft small, .lv-head .lv-pop li > span.lv-ft small { color: var(--muted); }
+.lv-head .lv-pop li .lv-fx { font-size: 14px; }
+/* Live: report sections that repeat the live panel (tiles, periods table, event list) are hidden during the game */
+#liveReport .live-hide { display: none; }
+/* Live on a phone: compact sticky header — score and clock on one line, one swipeable row of pills */
+@media (max-width: 600px) {
+  .lv-head { gap: 4px 10px; padding: 8px 12px; margin: -14px -16px 10px; }
+  .lv-head b { font-size: 21px; }
+  .lv-head > span { font-size: 13px; }
+  .lv-head .lv-stamp { display: none; }
+  .lv-head .lv-now { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; min-height: 36px; margin-top: 2px; padding-bottom: 0; }
+  .lv-head .lv-now::-webkit-scrollbar { display: none; }
+  .lv-now-i { flex: 0 0 auto; white-space: nowrap; padding: 5px 10px 7px; gap: 7px; }
+  .lv-now-i b { font-size: 14px; }
+  .lv-head .lv-now-i span { font-size: 13px; }
+  .lv-hist { position: sticky; right: 0; flex: 0 0 auto; padding: 6px 10px; box-shadow: -10px 0 10px -4px #fff; }
+  .lv-hist .lbl { display: none; }
+  .lv-pop { right: 8px; left: 8px; width: auto; }
+}
+.lv-ptab tr.run th, .lv-ptab tr.run td { background: #f7f8fa; }
+.lv-ptab tr.run th small { display: block; font-size: 10.5px; font-weight: 700; color: #e53935; text-transform: uppercase; letter-spacing: .05em; }

@@ -35,7 +35,9 @@ function reportData(g, st, sm) {
   const so = g.game.finishedType === 'ENDED_DURING_WINNING_SHOT_COMPETITION';
   // Score excluding the shootout-deciding goal
   const gf = goals.filter(x => x.valid && x.mine).length, ga = goals.filter(x => x.valid && !x.mine).length;
-  return { home, S, O, goals, penalties, shots, end, so, gf, ga, xgf: S.expectedGoals, xga: O.expectedGoals,
+  // now: game time of a game in progress (null when finished), used to stop the timeline at the present moment
+  const now = g.game.ended || !g.game.started ? null : (g.game.gameTime || 0);
+  return { home, S, O, goals, penalties, shots, end, now, so, gf, ga, xgf: S.expectedGoals, xga: O.expectedGoals,
     ppGF: goals.filter(x => x.valid && x.mine && x.types.some(t => t.startsWith('YV'))).length,
     ppGA: goals.filter(x => x.valid && !x.mine && x.types.some(t => t.startsWith('YV'))).length,
     shGF: goals.filter(x => x.valid && x.mine && x.types.some(t => t.startsWith('AV'))).length,
@@ -67,7 +69,7 @@ function deservedHtml(d, gkSai, oppName) {
   if (d.shGF || d.shGA) special.push(`AV-maalit ${pair(d.shGF, d.shGA)}`);
   if (d.enGF || d.enGA) special.push(`tyhjiin ${pair(d.enGF, d.enGA)}`);
   const teams = esc(hf(d.home, 'SaiPa', oppName).join('–'));
-  return `<div class="card">
+  return `<div class="card live-hide">
     <h2><span class="tag">Tulos vs. maalipaikat</span></h2>
     <div class="dr">
       <div class="dr-score"><div class="k">Maalit</div><div class="dr-big">${pair(d.gf, d.ga)}</div><div class="muted small">${teams}${d.so ? ' · ilman voittolaukausta' : ''}</div></div>
@@ -133,19 +135,24 @@ function flowHtml(d, oppName) {
   const sT = steps(true), oT = steps(false);
   const maxN = Math.max(1, sT.length, oT.length);
   const y = n => H - m.b - (n / maxN) * (H - m.t - m.b);
-  const path = ts => { let p = `M${x(0)},${y(0)}`; ts.forEach((t, i) => { p += ` H${x(t)} V${y(i + 1)}`; }); return p + ` H${x(end)}`; };
+  const live = d.now != null && d.now < end, tEnd = live ? d.now : end, xe = x(tEnd);
+  const path = ts => { let p = `M${x(0)},${y(0)}`; ts.forEach((t, i) => { p += ` H${x(t)} V${y(i + 1)}`; }); return p + ` H${xe}`; };
+  // Live: a "now" line, and the rest of the game shaded as not yet played
+  const nowMark = live ? `<rect x="${xe}" y="${m.t - 10}" width="${x(end) - xe}" height="${H - m.b - m.t + 10}" fill="#f4f4f1"/>
+    <line x1="${xe}" x2="${xe}" y1="${m.t - 22}" y2="${H - m.b}" stroke="#e53935" stroke-width="2"/>
+    <text x="${xe}" y="${m.t - 26}" font-size="11" font-weight="700" text-anchor="middle" fill="#e53935">NYT ${esc(inPeriod(d.now))}</text>` : '';
   const periodLines = [1200, 2400, 3600].filter(t => t < end).map(t => `<line x1="${x(t)}" x2="${x(t)}" y1="${m.t - 10}" y2="${H - m.b}" stroke="#d6d6d0" stroke-dasharray="3 3"/>`).join('');
   const periodLabels = [[0, '1. erä'], [1200, '2. erä'], [2400, '3. erä'], [3600, 'JA']].filter(([t]) => t < end).map(([t, l]) => `<text x="${x(t) + 4}" y="${m.t - 16}" font-size="11" fill="#6b6b6b">${l}</text>`).join('');
   const goalMarks = d.goals.map(g => {
     const cx = x(g.t), col = g.mine ? 'var(--yellow)' : '#6f6f6a';
     const stroke = g.valid ? '#111' : '#c0392b';
     return `<g><line x1="${cx}" x2="${cx}" y1="${m.t - 6}" y2="${H - m.b}" stroke="${g.valid ? col : '#c0392b'}" stroke-width="${g.valid ? 2 : 1}" ${g.valid ? '' : 'stroke-dasharray="2 2"'} opacity=".8"/>
-      <circle cx="${cx}" cy="${m.t - 6}" r="7" fill="${g.valid ? col : '#fff'}" stroke="${stroke}" stroke-width="1.5" data-tip="${esc([g.valid ? `${g.scorer}\t${g.score}` : 'Hylätty maali', `Aika\t${inPeriod(g.t)}`, ...(g.assists.length ? [`Syöttäjät\t${g.assists.join(', ')}`] : g.valid ? ['Syöttäjät\tei syöttäjiä'] : []), ...(g.types.length ? [`Tilanne\t${g.types.join(', ')}`] : [])].join('\n'))}"/></g>`;
+      <circle cx="${cx}" cy="${m.t - 6}" r="7" fill="${g.valid ? col : '#fff'}" stroke="${stroke}" stroke-width="1.5" data-tip="${esc([`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? 'SaiPa' : oppName} · ${inPeriod(g.t)}`, ...(g.valid ? [`Tekijä\t${g.scorer}`, `Syöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}`] : [])].join('\n'))}"/></g>`;
   }).join('');
   const penRow = (L, mine, y0) => L.list.map(p => {
     const tip = [`${esc(p.player)}`, `Rike\t${esc(p.name)}`, `Rangaistus\t${p.min} min`, `Tuomittu\t${inPeriod(p.called)}`, ...(p.t > p.called ? [`Alkoi\t${inPeriod(p.t)}`] : []), `Päättyi\t${(t => t > 0 && t % 1200 === 0 && t <= 3600 ? `${t / 1200}. erä 20:00` : inPeriod(t))(Math.min(p.end, end))}`, ].join('\n');
     const yy = y0 + p.lane * LH;
-    return `<g data-tip="${tip}">${p.t > p.called ? `<line x1="${x(p.called)}" x2="${x(p.t)}" y1="${yy + 3.5}" y2="${yy + 3.5}" stroke="${mine ? '#e0a800' : '#9a9a94'}" stroke-dasharray="2 2"/>` : ''}<rect x="${x(p.t)}" y="${yy}" width="${Math.max(3, x(Math.min(p.end, end)) - x(p.t))}" height="7" rx="2" fill="${mine ? '#e0a800' : '#9a9a94'}" stroke="#fff" stroke-width="1"/></g>`;
+    return `<g data-tip="${tip}">${p.t > p.called ? `<line x1="${x(p.called)}" x2="${x(p.t)}" y1="${yy + 3.5}" y2="${yy + 3.5}" stroke="${mine ? '#e0a800' : '#9a9a94'}" stroke-dasharray="2 2"/>` : ''}<rect x="${x(p.t)}" y="${yy}" width="${Math.max(3, x(Math.min(p.end, tEnd)) - x(p.t))}" height="7" rx="2" fill="${mine ? '#e0a800' : '#9a9a94'}" stroke="#fff" stroke-width="1"/></g>`;
   }).join('');
   // Penalty lanes: home team on top
   const top = d.home ? LS : LO, bot = d.home ? LO : LS;
@@ -163,10 +170,10 @@ function flowHtml(d, oppName) {
     <h2>Ottelun virta</h2>
     ${hasShots ? '' : '<p class="muted small">Laukauskartta puuttuu, joten laukausyrityksiä ei ole aikajanalla.</p>'}
     <div class="flow-wrap"><svg class="flow" viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Ottelun virta">
-      ${band}${band2}${periodLines}${periodLabels}
+      ${nowMark}${band}${band2}${periodLines}${periodLabels}
       ${hasShots ? `<path d="${path(oT)}" fill="none" stroke="#6f6f6a" stroke-width="2.5"/><path d="${path(sT)}" fill="none" stroke="#e0b400" stroke-width="3"/>
-      <text x="${x(end) + 6}" y="${y(sT.length) + (sT.length >= oT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#8a6d00">SaiPa ${sT.length}</text>
-      <text x="${x(end) + 6}" y="${y(oT.length) + (oT.length > sT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#555">${esc(oppName)} ${oT.length}</text>` : ''}
+      <text x="${xe + 6}" y="${y(sT.length) + (sT.length >= oT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#8a6d00">SaiPa ${sT.length}</text>
+      <text x="${xe + 6}" y="${y(oT.length) + (oT.length > sT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#555">${esc(oppName)} ${oT.length}</text>` : ''}
       ${goalMarks}
       ${penRow(LS, true, yS)}${penRow(LO, false, yO)}
       <text x="${m.l - 6}" y="${yS + 7}" font-size="10" text-anchor="end" fill="#6b6b6b">SAI</text>
@@ -186,7 +193,7 @@ function goalsHtml(d, gameId, season) {
         ${g.types.map(t => `<span class="badge">${esc(GOAL_TYPE_LABEL[t] || t)}</span>`).join(' ')}
         ${g.valid ? '' : '<span class="badge b-luck">Hylätty videotarkistuksessa</span>'}${g.winning && g.valid ? '<span class="badge b-fire">Voittomaali</span>' : ''}</div>
     </div>`).join('');
-  return `<div class="card">
+  return `<div class="card live-hide">
     <h2>Maalit</h2>
     <div class="goals">${rows}</div>
     <p class="small"><a href="https://liiga.fi/fi/peli/${season}/${gameId}/seuranta" target="_blank" rel="noopener">Maalivideot liiga.fi:ssä ↗</a></p>

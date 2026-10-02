@@ -59,7 +59,7 @@ function linesHtml(x) {
   };
   const tbl = (kind, title) => {
     const rows = x.units.filter(u => u.kind === kind && u.gp >= 2).sort((a, b) => (b.gf - b.ga) - (a.gf - a.ga) || b.gp - a.gp);
-    return `<h3>${title}</h3><div class="tablewrap"><table class="mini ln-t"><tr><th>Pelaajat</th><th data-tip="Line = Line Number\nKetjun numero kokoonpanossa">Line</th><th data-tip="GP = Games Played\nYhteiset ottelut">GP</th><th data-tip="GF–GA = Goals For – Against\nTasakentin maalit puolesta–vastaan yksikön ollessa jäällä">GF–GA</th><th data-tip="+/- = Goal Differential\nMaaliero">+/-</th><th data-tip="GF% = Goals For Percentage\nOman joukkueen osuus maaleista">GF%</th></tr>${rows.map(row).join('') || '<tr><td colspan="6" class="muted">Ei vielä vähintään kahta yhteistä ottelua.</td></tr>'}</table></div>`;
+    return `<h3>${title}</h3><div class="tablewrap"><table class="mini ln-t"><tr><th>Pelaajat</th><th data-tip="Line Number\nKetjun numero kokoonpanossa">Line</th><th data-tip="Games Played\nYhteiset ottelut">GP</th><th data-tip="Goals For – Against\nTasakentin maalit puolesta–vastaan yksikön ollessa jäällä">GF–GA</th><th data-tip="Goal Differential\nMaaliero">+/-</th><th data-tip="Goals For Percentage\nOman joukkueen osuus maaleista">GF%</th></tr>${rows.map(row).join('') || '<tr><td colspan="6" class="muted">Ei vielä vähintään kahta yhteistä ottelua.</td></tr>'}</table></div>`;
   };
   const duos = x.duos.filter(d => d.gf + d.ga >= 5);
   const best = duos.filter(d => d.gf > d.ga).sort((a, b) => (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf).slice(0, 5);
@@ -182,7 +182,7 @@ function streaksHtml(S) {
       ${card('🥶 Kylmä putki', scorers.filter(p => p.dry >= 3).sort((a, b) => b.dry - a.dry), p => `${p.dry} ottelua ilman pisteitä · kausi ${p.pts} P`, 'bad')}
     </div>
     <h3>Vire: viisi viime ottelua</h3>
-    <div class="tablewrap"><table class="mini form-t"><tr><th>Pelaaja</th><th data-tip="L5 = Last 5 Games\nViisi viime ottelua, vanhin ensin. Numero = pisteet">L5</th><th data-tip="P = Points\nPisteet viidessä viime ottelussa">P</th><th data-tip="Kausi = Season\nKauden pisteet ja ottelut">Kausi</th></tr>
+    <div class="tablewrap"><table class="mini form-t"><tr><th>Pelaaja</th><th data-tip="Last 5 Games\nViisi viime ottelua, vanhin ensin. Numero = pisteet">L5</th><th data-tip="Points\nPisteet viidessä viime ottelussa">P</th><th data-tip="Kauden pisteet ja ottelut">Kausi</th></tr>
       ${form.map(p => `<tr><td>${plink(p, `${esc(p.first)} ${esc(p.last)}`)}</td><td>${p.l5.map(x => `<i class="fd ${x.g ? 'g' : x.pts ? 'p' : ''}" title="${fiDate(x.date)}: ${x.g}+${x.pts - x.g}">${x.pts || ''}</i>`).join('')}</td><td><b>${p.l5pts}</b></td><td>${p.pts} P / ${p.gp} GP</td></tr>`).join('')}
     </table></div>
     <p class="muted small">Keltainen = maali · vaalea = vain syöttöpisteitä</p>`;

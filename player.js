@@ -209,7 +209,7 @@ function skaterPage(id, rows, bio, league) {
     <div class="card" id="pShots"><h2>Laukauskartta</h2><p class="loading">Haetaan laukauksia…</p></div>
     <div class="card" id="careerCard"><h2>Ura</h2><p class="loading">Haetaan uraa…</p></div>
     <div class="card"><h2>Ottelut</h2><div class="tablewrap"><table class="mini glog">
-      <tr><th>Ottelu</th><th>Tulos</th><th data-tip="G = Goals\nMaalit">G</th><th data-tip="A = Assists\nSyötöt">A</th><th data-tip="iCF = Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="SOG = Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="xG = Expected Goals\nMaaliodottama">xG</th><th data-tip="C+/- = Corsi Differential\nTasakentin laukausyritykset puolesta − vastaan">C+/-</th><th data-tip="TOI = Time on Ice\nPeliaika">TOI</th><th data-tip="GS = Game Score\nPelipisteet">GS</th></tr>
+      <tr><th>Ottelu</th><th>Tulos</th><th data-tip="Goals\nMaalit">G</th><th data-tip="Assists\nSyötöt">A</th><th data-tip="Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="Expected Goals\nMaaliodottama">xG</th><th data-tip="Corsi Differential\nTasakentin laukausyritykset puolesta − vastaan">C+/-</th><th data-tip="Time on Ice\nPeliaika">TOI</th><th data-tip="Game Score\nPelipisteet">GS</th></tr>
       ${[...rows].reverse().map(r => r.p ? `<tr><td><a href="?game=${r.game.id}&tab=report">${esc(oppLabel(r))}</a></td><td>${resLabel(r)}</td><td>${r.p.g}</td><td>${r.p.a}</td><td>${r.p.shots}</td><td>${r.p.sog ?? '–'}</td><td>${num(r.p.ixg, 2)}</td>
         <td><span class="${cls(r.p.cf - r.p.ca)}">${signed(r.p.cf - r.p.ca, 0)}</span>${r.p.corsiOk === false ? '*' : ''}</td><td>${mmss(r.p.toi)}</td><td><b>${num(r.p.gs, 2)}</b></td></tr>`
         : `<tr class="idle"><td><a href="?game=${r.game.id}&tab=report">${esc(oppLabel(r))}</a></td><td>${resLabel(r)}</td><td colspan="8" class="muted">Ei kokoonpanossa</td></tr>`).join('')}
@@ -240,7 +240,7 @@ function skaterShots(id, rows, league, box) {
         <div>${zoneHeat(mine, 'sai')}${mapLegend()}</div>
         <div>
           ${p != null ? `<p class="lead"><b>${pct(myShare, 0)}</b> yrityksistä tulee maalin edestä. Liigan ${GROUP_ELA[g]} (vähintään 15 yritystä) se on <b>${p}. persentiili</b>.</p>` : ''}
-          <table class="mini"><tr><th>Alue</th><th data-tip="iCF = Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="SOG = Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="G = Goals\nMaalit">G</th><th data-tip="SH% = Shooting Percentage\nMaalit / laukaukset maalia kohti">SH%</th></tr>
+          <table class="mini"><tr><th>Alue</th><th data-tip="Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="Goals\nMaalit">G</th><th data-tip="Shooting Percentage\nMaalit / laukaukset maalia kohti">SH%</th></tr>
           ${ZONES.map(k => { const a = z(k.k); if (!a.length) return ''; const sog = a.filter(s => s.sog).length, gl = a.filter(s => s.goal).length;
             return `<tr><td title="${esc(k.d)}">${k.l}</td><td>${a.length}</td><td>${sog}</td><td><b>${gl}</b></td><td>${pct(sog ? gl / sog : null, 0)}</td></tr>`; }).join('')}
           <tr><td><b>Yhteensä</b></td><td>${mine.length}</td><td>${mine.filter(s => s.sog).length}</td><td><b>${mine.filter(s => s.goal).length}</b></td><td></td></tr></table>
@@ -284,13 +284,13 @@ function goaliePage(id, rows, bio, league) {
       <p class="muted small">Lähde: liiga.fi:n kausitilastot (${me.gp} ottelua). Persentiili 100 = liigan paras.</p>` : '<p class="muted">Maalivahti ei ole vielä Liigan kausitilastoissa.</p>'}
     </div>
     <div class="card"><h2>Erä erältä</h2><div class="tablewrap"><table class="mini">
-      <tr><th></th><th data-tip="GP = Games Played\nOttelut">GP</th><th data-tip="SV = Saves\nTorjunnat">SV</th><th data-tip="GA = Goals Against\nPäästetyt maalit">GA</th><th data-tip="SV% = Save Percentage\nTorjuntaprosentti">SV%</th><th data-tip="xGA = Expected Goals Against\nPäästetty maaliodottama">xGA</th><th data-tip="GSAx = Goals Saved Above Expected\nxGA − päästetyt maalit">GSAx</th></tr>
+      <tr><th></th><th data-tip="Games Played\nOttelut">GP</th><th data-tip="Saves\nTorjunnat">SV</th><th data-tip="Goals Against\nPäästetyt maalit">GA</th><th data-tip="Save Percentage\nTorjuntaprosentti">SV%</th><th data-tip="Expected Goals Against\nPäästetty maaliodottama">xGA</th><th data-tip="Goals Saved Above Expected\nxGA − päästetyt maalit">GSAx</th></tr>
       ${Object.values(per).map(o => `<tr><td><b>${PERIOD_LABEL(o.n)}</b></td><td>${o.gp}</td><td>${o.saves}</td><td>${o.ga}</td><td>${pct((o.saves + o.ga) ? o.saves / (o.saves + o.ga) : null, 1)}</td><td>${num(o.xga, 2)}</td><td><span class="${cls(o.xga - o.ga)}">${signed(o.xga - o.ga, 2)}</span></td></tr>`).join('')}
     </table></div></div>
     <div class="card"><h2>Mistä maalit tulevat</h2><div id="gkMap"><p class="loading">Haetaan laukauskarttoja…</p></div></div>
     <div class="card" id="careerCard"><h2>Ura</h2><p class="loading">Haetaan uraa…</p></div>
     <div class="card"><h2>Ottelut</h2><div class="tablewrap"><table class="mini glog">
-      <tr><th>Ottelu</th><th>Tulos</th><th>Rooli</th><th data-tip="TOI = Time on Ice\nPeliaika">TOI</th><th data-tip="SV = Saves\nTorjunnat">SV</th><th data-tip="GA = Goals Against\nPäästetyt maalit">GA</th><th data-tip="SV% = Save Percentage\nTorjuntaprosentti">SV%</th><th data-tip="xGA = Expected Goals Against\nPäästetty maaliodottama">xGA</th><th data-tip="GSAx = Goals Saved Above Expected\nxGA − päästetyt maalit">GSAx</th></tr>
+      <tr><th>Ottelu</th><th>Tulos</th><th>Rooli</th><th data-tip="Time on Ice\nPeliaika">TOI</th><th data-tip="Saves\nTorjunnat">SV</th><th data-tip="Goals Against\nPäästetyt maalit">GA</th><th data-tip="Save Percentage\nTorjuntaprosentti">SV%</th><th data-tip="Expected Goals Against\nPäästetty maaliodottama">xGA</th><th data-tip="Goals Saved Above Expected\nxGA − päästetyt maalit">GSAx</th></tr>
       ${[...rows].reverse().map(r => r.p && r.p.played ? `<tr><td><a href="?game=${r.game.id}&tab=report">${esc(oppLabel(r))}</a></td><td>${resLabel(r)}</td><td>${r.p.status}</td><td>${mmss(r.p.toi)}</td><td>${r.p.saves}</td><td>${r.p.ga}</td>
         <td>${pct((r.p.saves + r.p.ga) ? r.p.saves / (r.p.saves + r.p.ga) : null, 1)}</td><td>${num(r.p.xga, 2)}</td><td><span class="${cls(r.p.gsax)}">${signed(r.p.gsax, 2)}</span></td></tr>`
         : `<tr class="idle"><td><a href="?game=${r.game.id}&tab=report">${esc(oppLabel(r))}</a></td><td>${resLabel(r)}</td><td colspan="7" class="muted">${r.roster?.line ? 'Varalla' : 'Ei kokoonpanossa'}</td></tr>`).join('')}

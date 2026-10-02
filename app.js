@@ -20,11 +20,11 @@ const W = {
 };
 
 const COMPONENTS = [
-  { key: 'tulos', label: 'Tulos', d: 'maalit, syötöt', color: 'var(--c-tulos)' },
-  { key: 'tuotanto', label: 'Tuotanto', d: 'laukaukset, xG', color: 'var(--c-tuotanto)' },
-  { key: 'hallinta', label: 'Hallinta', d: 'Corsi, maaliero kentällä', color: 'var(--c-hallinta)' },
-  { key: 'puolustus', label: 'Puolustus', d: 'blokit', color: 'var(--c-puolustus)' },
-  { key: 'muut', label: 'Muut', d: 'aloitukset, jäähyt', color: 'var(--c-muut)' },
+  { key: 'tulos', label: 'Tulos', d: 'maalit, syötöt', tip: 'Maalit, ensisyötöt, toissyötöt', color: 'var(--c-tulos)' },
+  { key: 'tuotanto', label: 'Tuotanto', d: 'laukaukset, xG', tip: 'Laukaukset maalia kohti, maaliodottama', color: 'var(--c-tuotanto)' },
+  { key: 'hallinta', label: 'Hallinta', d: 'Corsi, maaliero kentällä', tip: 'Laukausyritysten ero, maaliero kentällä', color: 'var(--c-hallinta)' },
+  { key: 'puolustus', label: 'Puolustus', d: 'blokit', tip: 'Blokit', color: 'var(--c-puolustus)' },
+  { key: 'muut', label: 'Muut', d: 'aloitukset, jäähyt', tip: 'Voitetut ja hävityt aloitukset, jäähyt', color: 'var(--c-muut)' },
 ];
 
 /* ---------- helpers ---------- */
@@ -435,7 +435,7 @@ async function renderGame(id, box = $('#gameContent')) {
       ${goalsHtml(rd, id, SEASON)}
       ${shotMapCard(ctx.sm, g, full.opp.teamName)}
 
-      <div class="card">
+      <div class="card live-hide">
         <h2>Erä erältä</h2>
         ${periodVsGame(summary, full.saipa.teamName, full.opp.teamName, home, { sxg: full.teamXg, oxg: full.oppXg })}
         <div class="erastars"><div class="es-k">⭐ Erän tähti</div>${perBest.filter(x => x.p).map(x => `<div class="es"><span>${PERIOD_LABEL(x.n)}</span><b>${esc(x.p.first + ' ' + x.p.last)}</b><small>${num(x.p.gs, 2)} pelipistettä</small></div>`).join('')}</div>
@@ -476,7 +476,8 @@ function skaterSets(rows, opt = {}) {
   const v = x => x == null ? x : Number.isInteger(x) ? x : num(x, 2);
   const ratio = (x, n, d = 0) => n ? pct(x / n, d) : '';
   // NHL-style abbreviations. The hover shows the English name and a short Finnish explanation.
-  const C = (k, l, en, fi, f, sv, g) => ({ k, l, t: `${l} = ${en}${fi ? '\n' + fi : ''}`, f, s: sv, ...(g ? { g } : {}) });
+  // Tip title is "ABBR = English name"; a Finnish column label without an abbreviation passes en = null and gets its label only
+  const C = (k, l, en, fi, f, sv, g) => ({ k, l, t: en ? `${en}${fi ? '\n' + fi : ''}` : fi, f, s: sv, ...(g ? { g } : {}) });
   const dash0 = v => v == null ? '–' : v;
   const fo = (w, n) => n ? `${w}/${n}` : '';
   const foS = (w, n) => n ? w / n : -1;
@@ -501,7 +502,7 @@ function skaterSets(rows, opt = {}) {
       C('pim', 'PIM', 'Penalty Minutes', 'Rangaistusminuutit', p => v(p.pim), p => p.pim),
     ]],
     gs: ['Pelipisteet', 'gs', [
-      ...COMPONENTS.map(c => C('c_' + c.key, c.label, `Game Score: ${c.label}`, `${c.d} (painot Mittarit-sivulla)`,
+      ...COMPONENTS.map(c => C('c_' + c.key, c.label, null, c.tip,
         q => { const v = gsPart(q, c.key); return `<span class="gs-sw" style="background:${c.color}"></span>${num(v, 2)}`; }, q => gsPart(q, c.key), 'GS = Tulos + Tuotanto + Hallinta + Puolustus + Muut')),
     ]],
     maalit: ['Maalit ja syötöt', 'pts', [
@@ -609,20 +610,20 @@ function drawPeriodContent(el, a, period, full) {
   const title = period == null ? 'Ottelun tähdet' : `${PERIOD_LABEL(period)}: erän tähdet`;
 
   el.innerHTML = `
-    <div class="card">
+    <div class="card live-hide">
       <h2><span class="tag">${title}</span></h2>
       ${top.length ? `<div class="podium">${top.map((p, i) => mvpCard(p, i)).join('')}</div>${legend()}` : '<p class="muted">Ei dataa tältä erältä.</p>'}
     </div>
 
-    <div class="card">
+    <div class="card live-hide">
       <h2>Bonustilastot${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}</h2>
-      <div class="tiles" data-n="${(period == null ? 2 : 0) + 3 + goalies.length}">
-        ${period == null && fast?.topSpeed ? tile('⚡', 'Huippuvauhti', num(fast.topSpeed * 3.6, 1), 'km/h', fast) : ''}
-        ${period == null && hard?.hardestShot ? tile('💥', 'Laukaus', num(hard.hardestShot * 3.6, 1), 'km/h', hard) : ''}
-        ${far?.dist ? tile('🏃', 'Luistelu', num(far.dist / 1000, 2), 'km', far) : ''}
-        ${pass?.passOk ? tile('🎯', 'Syötöt', pass.passOk, '', pass, 'onnistunutta') : ''}
-        ${blocker?.blk ? tile('🛡️', 'Blokit', blocker.blk, '', blocker) : ''}
-        ${goalies.map(gk => tile('🧤', 'Maalivahti', signed(gk.gsax, 2), 'GSAx', gk, `${gk.saves} torjuntaa · xGA ${num(gk.xga, 2)}`, gk.gsax >= 0 ? 'pos' : 'neg')).join('')}
+      <div class="tiles" data-n="${5 + goalies.length}">
+        ${fast?.topSpeed ? tile('⚡', 'Huippuvauhti', num(fast.topSpeed * 3.6, 1), 'km/h', fast, period == null ? '' : 'koko ottelu', '', period == null ? '' : 'Liiga antaa huippuvauhdin vain koko ottelulta, ei eräkohtaisesti') : tile('⚡', 'Huippuvauhti', '–', '', null, 'ei dataa')}
+        ${hard?.hardestShot ? tile('💥', 'Laukaus', num(hard.hardestShot * 3.6, 1), 'km/h', hard, period == null ? '' : 'koko ottelu', '', period == null ? '' : 'Liiga antaa laukausnopeuden vain koko ottelulta, ei eräkohtaisesti') : tile('💥', 'Laukaus', '–', '', null, 'ei dataa')}
+        ${far?.dist ? tile('🏃', 'Luistelu', num(far.dist / 1000, 2), 'km', far) : tile('🏃', 'Luistelu', '–', '', null, 'ei dataa')}
+        ${pass?.passOk ? tile('🎯', 'Syötöt', `${pass.passOk}/${pass.passes}`, '', pass, '', '', 'Eniten onnistuneita syöttöjä\nOnnistuneet / kaikki syötöt') : tile('🎯', 'Syötöt', '0', '', null, 'ei onnistuneita')}
+        ${blocker?.blk ? tile('🛡️', 'Blokit', blocker.blk, '', blocker) : tile('🛡️', 'Blokit', '0', '', null, 'ei blokkeja')}
+        ${goalies.map(gk => tile('🧤', 'Maalivahti', signed(gk.gsax, 2), 'GSAx', gk, '', gk.gsax >= 0 ? 'pos' : 'neg', `Goals Saved Above Expected\nTorjunnat\t${gk.saves}\nPäästetyt\t${gk.ga}\nxGA\t${num(gk.xga, 2)}`)).join('')}
       </div>
     </div>
 
@@ -653,9 +654,9 @@ function drawPeriodContent(el, a, period, full) {
   const svCol = (k, l, t, test) => ({ k, l, t, f: p => { const r = svBy(p, test); return dash(p, r.n ? `${pct(r.pct, 0)} <small class="muted">${r.sv}/${r.n}</small>` : '–'); }, s: p => p.played ? (svBy(p, test).pct ?? -1) : -1 });
 
   const gkName = { k: 'last', l: 'Maalivahti', f: p => `${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<span class="pos-chip">#${p.jersey ?? ''}</span>`, s: p => p.last };
-  const gkRole = { k: 'status', l: 'G#', t: 'G# = Goalie Number\n1. = aloittava maalivahti, 2. = varamaalivahti', f: p => `${p.mvNo}.`, s: p => -p.mvNo };
-  const G = (k, l, en, fi, f, sv, g) => ({ k, l, t: `${l} = ${en}${fi ? '\n' + fi : ''}`, f, s: sv, ...(g ? { g } : {}) });
-  const svG = (k, l, en, fi, test, g) => ({ ...svCol(k, l, `${l} = ${en}\n${fi}`, test), ...(g ? { g } : {}) });
+  const gkRole = { k: 'status', l: 'G#', t: 'Goalie Number\n1. = aloittava maalivahti, 2. = varamaalivahti', f: p => `${p.mvNo}.`, s: p => -p.mvNo };
+  const G = (k, l, en, fi, f, sv, g) => ({ k, l, t: `${en}${fi ? '\n' + fi : ''}`, f, s: sv, ...(g ? { g } : {}) });
+  const svG = (k, l, en, fi, test, g) => ({ ...svCol(k, l, `${en}\n${fi}`, test), ...(g ? { g } : {}) });
   const sa = p => p.saves + p.ga;
   const GK_SETS = {
     perus: ['Perustilastot', 'status', [
@@ -691,7 +692,7 @@ function drawPeriodContent(el, a, period, full) {
     GK_SET = key;
     gkBar.querySelectorAll('.sbtn').forEach(b => b.classList.toggle('active', b.dataset.k === key));
     const [, sortKey, cols] = GK_SETS[key];
-    sortableTable($('#gkGameTable', el), a.goalies || [], [gkName, gkRole, ...cols, { k: 'gs', l: 'GS', t: 'GS = Game Score\nPelipisteet: SaiPa-datan oma kokonaisarvio', f: p => dash(p, `<b>${num(p.gs, 2)}</b>`), s: p => p.played ? p.gs : -99 }], sortKey, p => p.played ? '' : 'idle');
+    sortableTable($('#gkGameTable', el), a.goalies || [], [gkName, gkRole, ...cols, { k: 'gs', l: 'GS', t: 'Game Score\nPelipisteet: SaiPa-datan oma kokonaisarvio', f: p => dash(p, `<b>${num(p.gs, 2)}</b>`), s: p => p.played ? p.gs : -99 }], sortKey, p => p.played ? '' : 'idle');
   };
   gkBar.innerHTML = Object.entries(GK_SETS).map(([k, [l]]) => `<button class="sbtn" data-k="${k}">${l}</button>`).join('');
   gkBar.querySelectorAll('.sbtn').forEach(b => b.onclick = () => drawGk(b.dataset.k));
@@ -702,7 +703,7 @@ function drawPeriodContent(el, a, period, full) {
  ? c
     : { ...c, f: p => noToi(p) ? '<span class="muted">–</span>' : c.f(p), s: p => noToi(p) ? -999 : c.s(p) });
   const name = { k: 'last', l: 'Pelaaja', f: p => `${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<span class="pos-chip">#${p.jersey ?? ''} ${esc(posEn(p.role))}</span>`, s: p => p.last };
-  const gsCol = { k: 'gs', l: 'GS', t: 'GS = Game Score\nPelipisteet: SaiPa-datan oma kokonaisarvio pelaajan ottelusta', f: p => `<b>${num(p.gs, 2)}</b>`, s: p => p.gs };
+  const gsCol = { k: 'gs', l: 'GS', t: 'Game Score\nPelipisteet: SaiPa-datan oma kokonaisarvio pelaajan ottelusta', f: p => `<b>${num(p.gs, 2)}</b>`, s: p => p.gs };
   const SETS = skaterSets(a.lineup || skaters, { teamXg: period == null ? full.teamXg : null, oppXg: period == null ? full.oppXg : null, per60: true });
   const setBar = $('#skSets', el);
   const drawSet = key => {
@@ -933,14 +934,14 @@ function scaleRow(p, mode) {
 // Season skater table: the game report's stat sets, as totals, per game or per 60 minutes
 function drawSeasonSkaters(sk, team) {
   const name = { k: 'last', l: 'Pelaaja', f: p => `${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<span class="pos-chip">#${p.jersey ?? ''} ${esc(posEn(p.role))}</span> ${p.badge || ''}`, s: p => p.last };
-  const gpCol = { k: 'gp', l: 'GP', t: 'GP = Games Played\nOttelut', f: p => p.gp, s: p => p.gp };
+  const gpCol = { k: 'gp', l: 'GP', t: 'Games Played\nOttelut', f: p => p.gp, s: p => p.gp };
   const MODES = [['tot', 'Yhteensä'], ['gp', 'Per ottelu'], ['60', 'Per 60 min']];
   const setBar = $('#ssSets'), modeBar = $('#ssMode');
   const draw = () => {
     const rows = sk.map(p => scaleRow(p, SS_MODE));
     const SETS = skaterSets(rows, { teamXg: team.xgf, oppXg: team.xga });
     if (!SETS[SS_SET]) SS_SET = 'perus';
-    const gsCol = { k: 'gs', l: SS_MODE === 'tot' ? 'GS' : SS_MODE === 'gp' ? 'GS/GP' : 'GS/60', t: 'GS = Game Score\nPelipisteet: SaiPa-datan oma kokonaisarvio', f: p => `<b>${num(p.gs, 2)}</b>`, s: p => p.gs, heat: true };
+    const gsCol = { k: 'gs', l: SS_MODE === 'tot' ? 'GS' : SS_MODE === 'gp' ? 'GS/GP' : 'GS/60', t: 'Game Score\nPelipisteet: SaiPa-datan oma kokonaisarvio', f: p => `<b>${num(p.gs, 2)}</b>`, s: p => p.gs, heat: true };
     setBar.innerHTML = Object.entries(SETS).map(([k, [l]]) => `<button class="sbtn${k === SS_SET ? ' active' : ''}" data-k="${k}">${l}</button>`).join('');
     modeBar.innerHTML = MODES.map(([k, l]) => `<button class="sbtn sm${k === SS_MODE ? ' active' : ''}" data-k="${k}">${l}</button>`).join('');
     setBar.querySelectorAll('.sbtn').forEach(b => b.onclick = () => { SS_SET = b.dataset.k; draw(); });
@@ -958,7 +959,7 @@ function drawSeasonGoalies(gks, L) {
     if (teamNum(g.homeTeamId) !== SAIPA_NUM && teamNum(g.awayTeamId) !== SAIPA_NUM) continue;
     for (const x of L.shots.get(g.id) || []) if (x.shootingTeamId !== SAIPA_NUM && isSog(x) && faced.has(x.blockerId)) faced.get(x.blockerId).push(normShot(x));
   }
-  const G = (k, l, en, fi, f, sv, g) => ({ k, l, t: `${l} = ${en}${fi ? '\n' + fi : ''}`, f, s: sv, ...(g ? { g } : {}) });
+  const G = (k, l, en, fi, f, sv, g) => ({ k, l, t: `${en}${fi ? '\n' + fi : ''}`, f, s: sv, ...(g ? { g } : {}) });
   const svG = (k, l, en, fi, test) => G(k, l, en, fi, p => { const f = (faced.get(p.id) || []).filter(test), sv = f.filter(x => !x.goal).length; return f.length ? `${pct(sv / f.length, 1)} <small class="muted">${sv}/${f.length}</small>` : '–'; },
     p => { const f = (faced.get(p.id) || []).filter(test); return f.length ? f.filter(x => !x.goal).length / f.length : -1; });
   const name = { k: 'last', l: 'Maalivahti', f: p => `${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<span class="pos-chip">#${p.jersey ?? ''}</span>`, s: p => p.last };
