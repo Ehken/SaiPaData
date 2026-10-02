@@ -557,9 +557,11 @@ function matchupsHtml(list, sai, opp) {
 // Without lineups, only players who played the team's latest game count, so injured or scratched players drop out.
 function keyPicks(sum, avail = null) {
   const lastGi = Math.max(-1, ...sum.players.map(p => p.lastGi ?? -1));
-  const ps = sum.players.filter(p => p.gp && (avail ? avail.has(p.id) : p.lastGi === lastGi));
+  const isAv = p => avail ? avail.has(p.id) : p.lastGi === lastGi;
+  const all = sum.players.filter(p => p.gp), ps = all.filter(isAv);
   const mt = n => `${n} ${n === 1 ? 'maali' : 'maalia'}`;
-  const top9 = new Set([...ps].sort((a, b) => b.toi / b.gp - a.toi / a.gp).slice(0, 9).map(p => p.id));
+  // Regulars are judged over the whole squad, so an injured regular's streak can still be shown (greyed)
+  const top9 = new Set([...all].sort((a, b) => b.toi / b.gp - a.toi / a.gp).slice(0, 9).map(p => p.id));
   const dd = p => { const d = p.lastPt ? new Date(p.lastPt) : null; return d ? `viimeisin piste ${d.getDate()}.${d.getMonth() + 1}.` : 'ei pisteitä tällä kaudella'; };
   // Each card shows a different player. When the category leader is already on an earlier card, the next one is
   // shown and the tag says the team rank; the hover always lists the top three.
@@ -569,22 +571,31 @@ function keyPicks(sum, avail = null) {
     ['📈 Maalit vielä tulossa', 'watch', ps.filter(p => p.gp >= 3 && p.ixg - p.g >= 0.5).sort((a, b) => (b.ixg - b.g) - (a.ixg - a.g)), p => signed(p.g - p.ixg, 1), p => `xG ${num(p.ixg, 1)} · ${mt(p.g)}`, 'Eniten maaleja alle maaliodottaman (G − xG)'],
     ['🎯 Viimeistelee yli odotusten', 'good', ps.filter(p => p.ixg >= 0.5 && p.fin >= 1).sort((a, b) => b.fin - a.fin), p => signed(p.fin, 1), p => `${mt(p.g)} · xG ${num(p.ixg, 1)}`, 'Eniten maaleja yli maaliodottaman (G − xG)'],
     ['⚡ Isoin maaliuhka', '', ps.filter(p => p.ixg >= 1).sort((a, b) => b.ixg - a.ixg), p => `xG ${num(p.ixg, 1)}`, p => `${p.shots} laukausyritystä · ${mt(p.g)}`, 'Eniten maaliodottamaa (xG) omista laukauksista'],
-    ['🥶 Kylmä putki', 'cold', ps.filter(p => top9.has(p.id) && p.drought >= 3).sort((a, b) => b.drought - a.drought || b.toi / b.gp - a.toi / a.gp), p => `${p.drought} ott.`, p => `${dd(p)} · peliaika ${mmss(p.toi / p.gp)} / ott.`, 'Pisin meneillään oleva putki ilman pisteitä, joukkueen 9 eniten pelaavaa'],
+    ['🥶 Kylmä putki', 'cold', all.filter(p => top9.has(p.id) && p.drought >= 3).sort((a, b) => b.drought - a.drought || b.toi / b.gp - a.toi / a.gp), p => `${p.drought} ott.`, p => `${dd(p)} · peliaika ${mmss(p.toi / p.gp)} / ott.`, 'Pisin meneillään oleva putki ilman pisteitä, joukkueen 9 eniten pelaavaa'],
   ];
   const used = new Set(), picks = [];
   for (const [k, cls, list, v, sub, rule] of CATS) {
-    const i = list.findIndex(p => !used.has(p.id));
+    // Cold streak: prefer a player who plays tonight; if only an absent one has a streak, show him greyed
+    let i = list.findIndex(p => !used.has(p.id) && (cls !== 'cold' || isAv(p)));
+    if (i < 0 && cls === 'cold') i = list.findIndex(p => !used.has(p.id));
     if (i < 0) continue;
     const p = list[i];
     used.add(p.id);
     const tip = [k, rule, ...list.slice(0, 3).map((x, n) => `${n + 1}. ${x.first} ${x.last}\t${v(x)}`)].join('\n');
-    picks.push({ p, k: i ? `${k} <span class="kp-rk">· joukkueen ${i + 1}.</span>` : k, v: v(p), sub: sub(p), cls, tip });
+    const out = !isAv(p);
+    picks.push({ p, k: i && !out ? `${k} <span class="kp-rk">· joukkueen ${i + 1}.</span>` : k, v: v(p), sub: out ? `Ei kokoonpanossa · ${sub(p)}` : sub(p), cls: out ? `${cls} out` : cls, tip: out ? `${tip}\nEi pelaa tänään, joten putki ei voi katketa` : tip });
+  }
+  // No cold streak among the regulars is news too: say so instead of dropping the card
+  if (!picks.some(x => x.cls.startsWith('cold')) && top9.size) {
+    const longest = Math.max(0, ...all.filter(p => top9.has(p.id)).map(p => p.drought));
+    picks.push({ p: null, k: '🥶 Kylmä putki', v: '–', sub: `Ei ketään: kaikilla joukkueen 9 eniten pelaavalla on pistettä ${longest <= 1 ? 'viime ottelussa' : `${longest} viime ottelun aikana`}`, cls: 'cold none', tip: '🥶 Kylmä putki\nPisin meneillään oleva putki ilman pisteitä, joukkueen 9 eniten pelaavaa\nNäytetään, kun putki on vähintään 3 ottelua' });
   }
   return picks;
 }
 function playersBlock(t, sum, photos = new Map(), avail = null) {
   const picks = keyPicks(sum, avail);
   const card = ({ p, k, v, sub, cls, tip }) => {
+    if (!p) return `<div class="kp ${cls}" data-tip="${esc(tip)}"><div class="kp-b"><div class="kp-tag">${k}</div><div class="kp-s">${sub}</div></div><div class="kp-v">${v}</div></div>`;
     const ph = photos.get(p.id);
     return `<div class="kp ${cls}" data-tip="${esc(tip)}">
       <div class="kp-ph">${ph ? `<img src="${esc(ph)}" alt="" loading="lazy" onerror="this.nextElementSibling.hidden = false; this.remove()">` : ''}<span${ph ? ' hidden' : ''}>${esc((p.first || '')[0] || '')}${esc((p.last || '')[0] || '')}</span></div>
@@ -743,7 +754,9 @@ function lineupBoard(sai, opp, lineups, sSum, oSum) {
     if (absent.length) out.push(`<b>Poissa</b> ${absent.map(p => `${esc(p.lastName)} (${p.injured ? 'loukkaantunut' : 'pelikielto'})`).join(', ')}`);
     return out.map(t => `<div>${t}</div>`).join('');
   };
-  return `<div class="lb">
+  // On a phone only one team fits: a toggle picks which side is shown (CSS hides the other)
+  return `<div class="lb" data-show="a">
+    <div class="lb-tog"><button class="sbtn active" data-s="a">${esc(A.t.name)}</button><button class="sbtn" data-s="b">${esc(B.t.name)}</button></div>
     <div class="lb-head"><div>${logoImg(A.t)}<b>${esc(A.t.name)}</b>${status(A)}</div><div></div><div class="b">${status(B)}<b>${esc(B.t.name)}</b>${logoImg(B.t)}</div></div>
     ${lines}
     ${extras(A) || extras(B) ? `<div class="lb-line"><div class="lb-side a"><div class="lb-r">${extras(A)}</div></div><div class="lb-n"><b>+</b><span>lisäpelaajat</span></div><div class="lb-side b"><div class="lb-r">${extras(B)}</div></div></div>` : ''}
@@ -751,3 +764,10 @@ function lineupBoard(sai, opp, lineups, sSum, oSum) {
     <div class="lb-notes"><div>${notes(A)}</div><div class="b">${notes(B)}</div></div>
   </div>`;
 }
+
+// Lineup board team toggle (phones): one delegated handler for every board on the page
+document.addEventListener('click', e => {
+  const b = e.target.closest('.lb-tog button'); if (!b) return;
+  const lb = b.closest('.lb'); lb.dataset.show = b.dataset.s;
+  lb.querySelectorAll('.lb-tog button').forEach(x => x.classList.toggle('active', x === b));
+});

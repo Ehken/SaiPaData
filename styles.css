@@ -964,3 +964,27 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .kp-ph span[hidden], .lp-ph span[hidden] { display: none; }
 /* Stat abbreviations keep their case (iCF, xG, GSAx); uppercase labels would turn them into ICF, XG */
 .p-big > span, .lv-ptab thead th { text-transform: none; letter-spacing: .02em; }
+.kp.none { opacity: .75; } .kp.none .kp-b { padding-left: 4px; }
+/* Lineup board on a phone: one team at a time (toggle), line number on the left, chips in a 3 + 2 grid */
+.lb-tog { display: none; }
+@media (max-width: 600px) {
+  .lb-tog { display: flex; gap: 6px; margin-bottom: 10px; }
+  .lb-tog .sbtn { flex: 1; }
+  .lb-head { display: none; }
+  .lb-line { grid-template-columns: 34px minmax(0, 1fr); gap: 8px; }
+  .lb-line .lb-n { order: -1; }
+  .lb[data-show="a"] .lb-side.b, .lb[data-show="b"] .lb-side.a { display: none; }
+  .lb-side, .lb-side.b { align-items: stretch; min-width: 0; }
+  .lb-r, .lb-side.b .lb-r { width: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; flex-direction: row; }
+  .lb-r:has(> .lp:nth-child(2):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 16%; }
+  .lp, .lb-side.b .lp { width: auto; min-width: 0; flex-direction: column; text-align: center; padding: 6px 4px; border-radius: 12px; gap: 3px; }
+  .lp.empty { display: block; }
+  .lp-t { align-items: center; max-width: 100%; }
+  .lp-t b { font-size: 12.5px; max-width: 100%; }
+  .lp-t small { font-size: 10px; }
+  .lb-n b { font-size: 22px; } .lb-n span { font-size: 8.5px; }
+  .lb-notes { grid-template-columns: 1fr; }
+  .lb[data-show="a"] .lb-notes .b, .lb[data-show="b"] .lb-notes > div:first-child { display: none; }
+  .lb-notes .b { text-align: left; }
+}
+.kp.out { filter: grayscale(1); opacity: .6; } .kp.out .kp-s { font-style: normal; }

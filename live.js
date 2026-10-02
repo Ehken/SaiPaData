@@ -174,7 +174,7 @@ async function previewVsTonight(next, g, st) {
   const res = [];
   for (const tid of [teamNum(next.homeTeamId), teamNum(next.awayTeamId)]) {
     const games = (await loadTeamGames(league, tid)).filter(x => x.start < next.start);
-    const picks = keyPicks(teamSummary(games));
+    const picks = keyPicks(teamSummary(games)).filter(x => x.p);
     const tonight = new Map(teamGame(g, st, tid, next).players.map(p => [p.id, p]));
     res.push({ tid, picks, tonight });
   }
