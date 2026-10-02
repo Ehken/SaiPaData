@@ -9,8 +9,49 @@
 const LIVE_POLL_MS = 30000;
 let liveTimer = null, livePeriod = 'all', liveSeen = new Set(), liveNotify = false;
 
+// Test mode: ?game=ID&tab=live&replay=1 replays a played SaiPa game with a time slider. The real data is cut
+// to the chosen moment: goals, penalties and shots by their time, player stats by finished periods (the current
+// period's xG pro rata). Nothing else on the site changes.
+const LIVE_REPLAY = new URLSearchParams(location.search).get('replay') === '1';
+let replayRaw = null, replayT = 1500, replayPlay = null;
+function replayCut(raw, T) {
+  const g = structuredClone(raw.g), st = structuredClone(raw.st);
+  const cur = Math.min(4, Math.floor(Math.min(T, 3899) / 1200) + 1), frac = (T - (cur - 1) * 1200) / 1200;
+  const G = g.game;
+  Object.assign(G, { gameTime: T, currentPeriod: cur, started: true, ended: false });
+  for (const side of ['home', 'away']) {
+    const team = G[`${side}Team`];
+    team.goalEvents = (team.goalEvents || []).filter(e => e.gameTime <= T);
+    team.penaltyEvents = (team.penaltyEvents || []).filter(e => e.gameTime <= T);
+    team.goals = team.goalEvents.filter(e => !(e.goalTypes || []).includes('VT0') && (e.period || 0) <= 4).length;
+    const pers = st[`${side}Team`] || [];
+    const xgOf = p => (p.periodPlayerStats || []).reduce((a, x) => a + (x.expectedGoalsPlayer || 0), 0);
+    team.expectedGoals = pers.filter(p => p.period < cur).reduce((a, p) => a + xgOf(p), 0) + pers.filter(p => p.period === cur).reduce((a, p) => a + xgOf(p) * frac, 0);
+    st[`${side}Team`] = pers.filter(p => p.period < cur);
+  }
+  const sm = (raw.sm || []).filter(x => x.gameTime <= T);
+  return [g, st, sm];
+}
+function replayControls(box, redraw, maxT) {
+  const bar = document.createElement('div');
+  bar.className = 'lv-replay';
+  bar.innerHTML = `<b>Testitila</b><button class="sbtn sm" data-a="play">${replayPlay ? '⏸' : '▶︎'}</button><button class="sbtn sm" data-a="-300">−5 min</button><button class="sbtn sm" data-a="300">+5 min</button>
+    <input type="range" min="0" max="${maxT}" step="30" value="${replayT}"><span>${replayT >= 3600 ? 'JA' : `${Math.floor(replayT / 1200) + 1}. erä`} ${mmss(replayT % 1200)}</span>
+    <small class="muted">Pelattu ottelu toistettuna. Pelaajatilastot päivittyvät erä kerrallaan.</small>`;
+  const go = t => { replayT = Math.max(0, Math.min(maxT, t)); redraw(); };
+  bar.querySelector('input').oninput = e => go(Number(e.target.value));
+  bar.querySelectorAll('button').forEach(b => b.onclick = () => {
+    if (b.dataset.a !== 'play') return go(replayT + Number(b.dataset.a));
+    if (replayPlay) { clearInterval(replayPlay); replayPlay = null; redraw(); return; }
+    replayPlay = setInterval(() => { if (!box.isConnected || replayT >= maxT) { clearInterval(replayPlay); replayPlay = null; } go(replayT + 60); }, 1500);
+    redraw();
+  });
+  box.prepend(bar);
+}
+
 // The game that is live now: SaiPa's next game from 10 minutes before puck drop until the API marks it ended
 function liveGameId() {
+  if (LIVE_REPLAY) return urlState().game;
   const g = typeof nextGameRow !== 'undefined' ? nextGameRow : null;
   if (!g || g.ended) return null;
   return Date.now() >= new Date(g.start).getTime() - 10 * 60000 ? String(g.id) : null;
@@ -18,6 +59,15 @@ function liveGameId() {
 
 // Fresh copies of the game endpoints, put into the shared cache so the report functions use them
 async function liveFetch(id) {
+  if (LIVE_REPLAY) {
+    if (!replayRaw) {
+      const [g, st, sm] = await Promise.all([getJSON(`/games/${SEASON}/${id}`), getJSON(`/games/stats/${SEASON}/${id}`), getJSON(`/shotmap/${SEASON}/${id}`).catch(() => [])]);
+      replayRaw = { g, st, sm: Array.isArray(sm) ? sm : [] };
+    }
+    const cut = replayCut(replayRaw, replayT);
+    [`/games/${SEASON}/${id}`, `/games/stats/${SEASON}/${id}`, `/shotmap/${SEASON}/${id}`].forEach((p, i) => cache.set(p, Promise.resolve(cut[i])));
+    return cut;
+  }
   const paths = [`/games/${SEASON}/${id}`, `/games/stats/${SEASON}/${id}`, `/shotmap/${SEASON}/${id}`];
   const data = await Promise.all(paths.map(p => fetch(API + p, { cache: 'no-store' })
     .then(r => r.ok ? r.json() : (p.includes('shotmap') ? [] : Promise.reject(new Error(`${r.status}`))))));
@@ -154,7 +204,7 @@ async function renderLive(id, box) {
   clearInterval(liveTimer);
   liveSeen = new Set();
   box.innerHTML = '<p class="loading">Haetaan live-dataa…</p>';
-  const next = nextGameRow;
+  const next = LIVE_REPLAY ? (await getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)).find(g => String(g.id) === String(id)) : nextGameRow;
   const pre = await loadForecast(next, next.start).then(F => F?.p).catch(() => null);
   const teams = new Map([[teamNum(next.homeTeamId), next.homeTeamName], [teamNum(next.awayTeamId), next.awayTeamName]]);
   let pvt = null, first = true;
@@ -228,8 +278,10 @@ async function renderLive(id, box) {
     if (pb && livePeriod !== 'all') pb.click();
     box.querySelectorAll('#liveReport .pbtn').forEach(b => b.addEventListener('click', () => { livePeriod = b.dataset.p; }));
     first = false;
+    if (LIVE_REPLAY) replayControls(box, draw, (replayRaw.g.game.gameTime || 3600) > 3600 ? replayRaw.g.game.gameTime : 3600);
     if (G.ended) clearInterval(liveTimer);
   };
   await draw();
+  if (LIVE_REPLAY) return;
   liveTimer = setInterval(() => { if (!document.hidden) draw(); }, LIVE_POLL_MS);
 }

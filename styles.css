@@ -846,3 +846,6 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .lv-ice { display: grid; grid-template-columns: 110px 1fr 52px 44px; align-items: center; gap: 8px; font-size: 13px; }
 .lv-ice i { height: 10px; background: var(--yellow); border-radius: 3px; } .lv-ice b { text-align: right; font-variant-numeric: tabular-nums; } .lv-ice small { color: var(--muted); text-align: right; }
 .lv-brk.on { background: var(--yellow-soft); border-radius: 10px; padding: 10px 14px; }
+.lv-replay { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--ink); color: #fff; padding: 8px 12px; border-radius: 10px; margin-bottom: 10px; }
+.lv-replay input { flex: 1; min-width: 160px; accent-color: var(--yellow); } .lv-replay small { width: 100%; color: rgba(255,255,255,.6); }
+.lv-replay .sbtn { background: #2a2a28; color: #fff; border-color: #444; }

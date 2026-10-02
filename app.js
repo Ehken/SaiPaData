@@ -350,7 +350,7 @@ function renderHub(id, section) {
   // Live view (live.js, optional add-on): available while the game is on
   const live = typeof liveGameId === 'function' && liveGameId() === String(id);
   const sec = live ? (section === 'ennakko' ? 'ennakko' : 'live') : ended ? (section === 'ennakko' ? 'ennakko' : 'ottelu') : 'ennakko';
-  const u = `?${new URLSearchParams({ game: id, tab: URL_TAB[sec] })}`;
+  const u = `?${new URLSearchParams({ game: id, tab: URL_TAB[sec], ...(new URLSearchParams(location.search).get('replay') === '1' ? { replay: 1 } : {}) })}`;
   if (!urlState().player && urlState().view === 'ottelu') history.replaceState(null, '', u);
   LAST_HUB = u;
   const box = $('#gameContent');
@@ -1186,7 +1186,7 @@ function sortableTable(el, rows, cols, initial, rowClass = () => '') {
 let LAST_HUB = '';   // address of the game view, restored when coming back to it
 function viewUrl(view, sub) {
   if (view === 'pelaaja') return location.search;
-  if (view === 'ottelu') return LAST_HUB || location.pathname;
+  if (view === 'ottelu') return LAST_HUB || (urlState().game ? location.search : location.pathname);
   const u = new URLSearchParams({ view: URL_VIEW[view] || view });
   if (sub) u.set('tab', URL_TAB[sub] || sub);
   return '?' + u.toString();
