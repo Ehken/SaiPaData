@@ -90,7 +90,7 @@ function showTip(e) {
   // If any value is long, every row stacks (label above value) so the rows stay consistent
   const long = rows.some(l => (l.split('\t')[1] || '').length > 22);
   tipEl.innerHTML = `<b>${esc(parts[0])}</b>` + rows.map(l => l.includes('\t')
-    ? (([k, v]) => `<div class="tr${long ? ' long' : ''}"><span>${esc(k)}</span><em>${esc(v)}</em></div>`)(l.split('\t')) : `<div class="tr"><span>${esc(l)}</span></div>`).join('');
+    ? (([k, v]) => `<div class="tr${long ? ' long' : ''}"><span>${esc(k)}</span><em>${esc(v)}</em></div>`)(l.split('\t')) : `<div class="tr txt"><span>${esc(l)}</span></div>`).join('');
   tipEl.style.display = 'block';
   const p = e.touches ? e.touches[0] : e;
   const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
@@ -871,8 +871,7 @@ async function renderSeason() {
       <div class="card" id="stateCard"><h2>Pelitilanteittain</h2><p class="loading">Lasketaan…</p></div>
       <div class="card" id="dsvCard"><h2>Sarjataulukko maalipaikkojen mukaan</h2><p class="loading">Lasketaan odotettuja pisteitä…</p></div>`)}
       ${sec('liiga', `
-      <div class="card" id="topCard"><h2>Liigan nopeimmat ja kovimmat</h2><p class="loading">Haetaan liigan tilastoja…</p></div>`)}
-      <details class="recon" id="reconCard"><summary>Datan täsmäytys liiga.fi:n virallisiin tilastoihin</summary><div id="reconBody"><p class="loading">Verrataan…</p></div></details>`;
+      <div class="card" id="topCard"><h2>Liigan nopeimmat ja kovimmat</h2><p class="loading">Haetaan liigan tilastoja…</p></div>`)}`;
 
     // Section tabs
     const TABS = [['yleis', 'Yleiskuva'], ['pelaajat', 'Pelaajat'], ['mv', 'Maalivahdit'], ['joukkue', 'Joukkue'], ['liiga', 'Liiga']];
@@ -882,7 +881,6 @@ async function renderSeason() {
     tabBar.querySelectorAll('.sbtn').forEach(b => b.onclick = () => showSec(b.dataset.k));
     showSec(SEASON_TAB);
 
-    runReconcile(games).then(r => { const el = $('#reconBody'); if (el) el.innerHTML = reconHtml(r); });
     seasonExtras(gks);
     seasonInsights(games);
     drawSeasonSkaters(sk, team);

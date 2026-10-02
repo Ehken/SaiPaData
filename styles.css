@@ -988,3 +988,8 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
   .lb-notes .b { text-align: left; }
 }
 .kp.out { filter: grayscale(1); opacity: .6; } .kp.out .kp-s { font-style: normal; }
+/* Plain text lines in a tooltip wrap normally; only labels of "label  value" rows stay on one line */
+.tip .tr.txt span { white-space: normal; }
+.kp-out { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #3a3a38; color: #fff; font-size: 10px; letter-spacing: .04em; vertical-align: 1px; }
+.kp.out { filter: none; opacity: 1; background: #f4f4f2; }
+.kp.out .kp-ph, .kp.out .kp-n, .kp.out .kp-s, .kp.out .kp-v { filter: grayscale(1); opacity: .55; }

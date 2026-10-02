@@ -571,7 +571,7 @@ function keyPicks(sum, avail = null) {
     ['📈 Maalit vielä tulossa', 'watch', ps.filter(p => p.gp >= 3 && p.ixg - p.g >= 0.5).sort((a, b) => (b.ixg - b.g) - (a.ixg - a.g)), p => signed(p.g - p.ixg, 1), p => `xG ${num(p.ixg, 1)} · ${mt(p.g)}`, 'Eniten maaleja alle maaliodottaman (G − xG)'],
     ['🎯 Viimeistelee yli odotusten', 'good', ps.filter(p => p.ixg >= 0.5 && p.fin >= 1).sort((a, b) => b.fin - a.fin), p => signed(p.fin, 1), p => `${mt(p.g)} · xG ${num(p.ixg, 1)}`, 'Eniten maaleja yli maaliodottaman (G − xG)'],
     ['⚡ Isoin maaliuhka', '', ps.filter(p => p.ixg >= 1).sort((a, b) => b.ixg - a.ixg), p => `xG ${num(p.ixg, 1)}`, p => `${p.shots} laukausyritystä · ${mt(p.g)}`, 'Eniten maaliodottamaa (xG) omista laukauksista'],
-    ['🥶 Kylmä putki', 'cold', all.filter(p => top9.has(p.id) && p.drought >= 3).sort((a, b) => b.drought - a.drought || b.toi / b.gp - a.toi / a.gp), p => `${p.drought} ott.`, p => `${dd(p)} · peliaika ${mmss(p.toi / p.gp)} / ott.`, 'Pisin meneillään oleva putki ilman pisteitä, joukkueen 9 eniten pelaavaa'],
+    ['🥶 Kylmä putki', 'cold', all.filter(p => top9.has(p.id) && p.drought >= 3).sort((a, b) => b.drought - a.drought || b.toi / b.gp - a.toi / a.gp), p => `${p.drought} ott.`, p => `${dd(p)} · peliaika ${mmss(p.toi / p.gp)} / ott.`, 'Pisin meneillään oleva putki ilman pisteitä'],
   ];
   const used = new Set(), picks = [];
   for (const [k, cls, list, v, sub, rule] of CATS) {
@@ -583,12 +583,12 @@ function keyPicks(sum, avail = null) {
     used.add(p.id);
     const tip = [k, rule, ...list.slice(0, 3).map((x, n) => `${n + 1}. ${x.first} ${x.last}\t${v(x)}`)].join('\n');
     const out = !isAv(p);
-    picks.push({ p, k: i && !out ? `${k} <span class="kp-rk">· joukkueen ${i + 1}.</span>` : k, v: v(p), sub: out ? `Ei kokoonpanossa · ${sub(p)}` : sub(p), cls: out ? `${cls} out` : cls, tip: out ? `${tip}\nEi pelaa tänään, joten putki ei voi katketa` : tip });
+    picks.push({ p, k: (i && !out ? `${k} <span class="kp-rk">· joukkueen ${i + 1}.</span>` : k) + (out ? ' <span class="kp-out">Ei kokoonpanossa</span>' : ''), v: v(p), sub: sub(p), out, cls: out ? `${cls} out` : cls, tip: out ? `${tip}\nEi pelaa tänään, joten putki ei voi katketa` : tip });
   }
   // No cold streak among the regulars is news too: say so instead of dropping the card
   if (!picks.some(x => x.cls.startsWith('cold')) && top9.size) {
     const longest = Math.max(0, ...all.filter(p => top9.has(p.id)).map(p => p.drought));
-    picks.push({ p: null, k: '🥶 Kylmä putki', v: '–', sub: `Ei ketään: kaikilla joukkueen 9 eniten pelaavalla on pistettä ${longest <= 1 ? 'viime ottelussa' : `${longest} viime ottelun aikana`}`, cls: 'cold none', tip: '🥶 Kylmä putki\nPisin meneillään oleva putki ilman pisteitä, joukkueen 9 eniten pelaavaa\nNäytetään, kun putki on vähintään 3 ottelua' });
+    picks.push({ p: null, k: '🥶 Kylmä putki', v: '–', sub: `Ei ketään: kaikilla vakiopelaajilla on pisteitä ${longest <= 1 ? 'viime ottelussa' : `${longest} viime ottelun aikana`}`, cls: 'cold none', tip: '🥶 Kylmä putki\nPisin meneillään oleva putki ilman pisteitä\nNäytetään, kun putki on vähintään 3 ottelua' });
   }
   return picks;
 }
