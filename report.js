@@ -73,7 +73,7 @@ function deservedHtml(d, gkSai, oppName) {
     <h2><span class="tag">Tulos vs. maalipaikat</span></h2>
     <div class="dr">
       <div class="dr-score"><div class="k">Maalit</div><div class="dr-big">${pair(d.gf, d.ga)}</div><div class="muted small">${teams}${d.so ? ' · ilman voittolaukausta' : ''}</div></div>
-      <div class="dr-score"><div class="k">Odotetut maalit (xG)</div><div class="dr-big">${pair(num(d.xgf, 2), num(d.xga, 2))}</div><div class="muted small">${teams}</div></div>
+      <div class="dr-score"><div class="k">Odotetut maalit</div><div class="dr-big">${pair(num(d.xgf, 2), num(d.xga, 2))}</div><div class="muted small">${teams}</div></div>
       ${part('SaiPan viimeistely', fin, `maalit − xG · ${d.gf} maalia, xG ${num(d.xgf, 2)}`)}
       ${part('SaiPan maalivahti', gk, `xGA − päästetyt · ${d.ga} päästettyä${gkSai ? ' · ' + esc(gkSai) : ''}`)}
     </div>

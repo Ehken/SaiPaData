@@ -178,7 +178,7 @@ function teamSummary(games) {
   }
   const last5 = games.slice(-5);
   const players = new Map();
-  for (const gm of games) {
+  for (const [gi, gm] of games.entries()) {
     const recent = last5.includes(gm);
     for (const p of gm.players) {
       if (!p.toi) continue;
@@ -190,7 +190,7 @@ function teamSummary(games) {
       if (recent) { t.l5 += p.g + p.a; t.l5gp++; }
       // Current run of games without a point (games are in date order)
       if (p.g + p.a) { t.drought = 0; t.lastPt = gm.start; } else t.drought++;
-      players.set(p.id, t);
+      t.lastGi = gi; players.set(p.id, t);
     }
   }
   for (const t of players.values()) { t.pts = t.g + t.a; t.fin = t.g - t.ixg; t.ixg60 = t.toi ? t.ixg / t.toi * 3600 : 0; t.gsPg = t.gs / t.gp; t.procPg = t.proc / t.gp; }
@@ -382,6 +382,7 @@ async function renderPreview(id, box) {
 function previewHtml({ next, sai, opp, sG, oG, sSum, oSum, league, nextGame, live = true, lineups = null }) {
   const matchups = keyMatchups(sai, opp, league);
   const pair = (s, o) => homeFirst(s, o).join('');
+  const avail = side => { const l = side?.cur || side?.prev; return l?.all?.length ? new Set(l.all.map(p => p.id)) : null; };
   const photos = side => new Map(((side?.cur || side?.prev)?.all || []).filter(p => p.pictureUrl).map(p => [p.id, p.pictureUrl]));
   return `
       ${live ? '' : `<div class="datanote"><b>Ennakko ennen ottelua</b><p>Tämä ennakko on laskettu datasta, joka oli olemassa ennen ottelun alkua. Ylivoiman, alivoiman, jäähyjen, aloitusten ja kiekonhallinnan Liiga-sijoituksia ei voi laskea jälkikäteen, joten niistä näytetään vain joukkueiden omat luvut.</p></div>`}
@@ -394,7 +395,7 @@ function previewHtml({ next, sai, opp, sG, oG, sSum, oSum, league, nextGame, liv
         <div class="card"><h2>Erä erältä</h2>${periodVsHtml(sai, opp, sSum, oSum)}</div>
       </div>
       <div class="card"><h2>Avainkamppailut</h2>${matchupsHtml(matchups, sai, opp)}</div>
-      <div class="card"><h2>Avainpelaajat</h2><div class="grid2 flat">${pair(playersBlock(sai, sSum, photos(lineups?.sai)), playersBlock(opp, oSum, photos(lineups?.opp)))}</div></div>
+      <div class="card"><h2>Avainpelaajat</h2><div class="grid2 flat">${pair(playersBlock(sai, sSum, photos(lineups?.sai), avail(lineups?.sai)), playersBlock(opp, oSum, photos(lineups?.opp), avail(lineups?.opp)))}</div></div>
       <div class="card"><h2>Maalivahdit</h2><div class="grid2 flat">${pair(goaliesBlock(sai, sSum, sG, nextGame, next), goaliesBlock(opp, oSum, oG, nextGame, next))}</div></div>
       ${lineups ? `<div class="card"><h2>Kokoonpanot</h2>${lineupBoard(sai, opp, lineups, sSum, oSum)}</div>` : ''}
       <div class="card" id="pfCard"><h2>Mistä maalit syntyvät</h2><p class="loading">Haetaan koko liigan laukauskarttoja…</p></div>
@@ -552,8 +553,11 @@ function matchupsHtml(list, sai, opp) {
 // Key players: three per team, each picked for a stated reason: the team's points leader (Kultakypärä), the
 // hottest right now, and a player to watch (many chances per 60, goals not there yet). Fallbacks fill the rest.
 // Key player picks (also used by the live view to compare the preview with the game)
-function keyPicks(sum) {
-  const ps = sum.players.filter(p => p.gp);
+// avail: ids of players who can play (tonight's lineup, or the previous game's when tonight's is not out yet).
+// Without lineups, only players who played the team's latest game count, so injured or scratched players drop out.
+function keyPicks(sum, avail = null) {
+  const lastGi = Math.max(-1, ...sum.players.map(p => p.lastGi ?? -1));
+  const ps = sum.players.filter(p => p.gp && (avail ? avail.has(p.id) : p.lastGi === lastGi));
   const mt = n => `${n} ${n === 1 ? 'maali' : 'maalia'}`;
   const top9 = new Set([...ps].sort((a, b) => b.toi / b.gp - a.toi / a.gp).slice(0, 9).map(p => p.id));
   const dd = p => { const d = p.lastPt ? new Date(p.lastPt) : null; return d ? `viimeisin piste ${d.getDate()}.${d.getMonth() + 1}.` : 'ei pisteitä tällä kaudella'; };
@@ -578,8 +582,8 @@ function keyPicks(sum) {
   }
   return picks;
 }
-function playersBlock(t, sum, photos = new Map()) {
-  const picks = keyPicks(sum);
+function playersBlock(t, sum, photos = new Map(), avail = null) {
+  const picks = keyPicks(sum, avail);
   const card = ({ p, k, v, sub, cls, tip }) => {
     const ph = photos.get(p.id);
     return `<div class="kp ${cls}" data-tip="${esc(tip)}">

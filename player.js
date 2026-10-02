@@ -54,7 +54,7 @@ function percentile(values, x, lowBetter = false) {
 // neutral in their own group and never count as a strength or a weakness.
 function pctBars(rows) {
   const row = r => `
-    <div class="pct-row ${r.use ? 'use' : ''}" data-tip="${esc(`${r.l}\nArvo\t${r.v}\nPersentiili\t${r.p}${r.note ? '\n' + r.note : ''}`)}"><div class="pct-l">${r.l}</div><div class="pct-v">${r.v}</div>
+    <div class="pct-row ${r.use ? 'use' : ''}" data-tip="${esc(`${r.en || r.l}\n${r.fi ? r.fi + '\n' : ''}Arvo\t${r.v}\nPersentiili\t${r.p}`)}"><div class="pct-l">${r.l}</div><div class="pct-v">${r.v}</div>
       <div class="pct-bar"><i class="${r.use ? '' : r.p >= 80 ? 'hi' : r.p <= 20 ? 'lo' : ''}" style="width:${Math.max(2, r.p)}%"></i></div><div class="pct-n">${r.p}</div></div>`;
   const ok = rows.filter(r => r.p != null), perf = ok.filter(r => !r.use), use = ok.filter(r => r.use);
   return `<div class="pct">${perf.map(row).join('')}${use.length ? `<div class="pct-sub">Käyttö</div>${use.map(row).join('')}` : ''}</div>`;
@@ -156,7 +156,8 @@ function playerHero(bio, line, sub) {
     <div class="p-line">${line}</div>
   </div>${sub || ''}`;
 }
-const bigStat = (v, l) => `<div class="p-big"><b>${v}</b><span>${l}</span></div>`;
+// Big header number: NHL-style abbreviation as the label, English name + Finnish explanation in the hover
+const bigStat = (v, l, en, fi) => `<div class="p-big"${en ? ` data-tip="${esc(`${en}${fi ? '\n' + fi : ''}`)}"` : ''}><b>${v}</b><span>${l}</span></div>`;
 
 function skaterPage(id, rows, bio, league) {
   const played = rows.filter(r => r.p);
@@ -171,31 +172,31 @@ function skaterPage(id, rows, bio, league) {
   const peers = league.sk.filter(x => x.group === group && x.gp >= 3 && x.toiAvg >= 480);
   const P = (k, low) => me ? percentile(peers.map(x => x[k]), me[k], low) : null;
   const pctRows = me ? [
-    { l: 'Maalit / 60', v: num(me.g60, 2), p: P('g60') },
-    { l: 'Pisteet / 60', v: num(me.p60, 2), p: P('p60') },
-    { l: 'xG / 60', v: num(me.xg60, 2), p: P('xg60'), note: 'Omat odotetut maalit 60 minuuttia kohden' },
-    { l: 'Laukausyritykset / 60', v: num(me.sh60, 1), p: P('sh60') },
-    { l: 'Viimeistely (G − xG)', v: signed(me.fin, 2), p: P('fin') },
-    { l: 'Peliaika / ottelu', v: mmss(me.toiAvg), p: P('toiAvg'), use: true },
-    { l: 'Ylivoima-aika / ottelu', v: mmss(me.pp), p: P('pp'), use: true },
-    { l: 'Alivoima-aika / ottelu', v: mmss(me.pk), p: P('pk'), use: true },
-    { l: 'Huippunopeus', v: kmh(me.speed), p: P('speed') },
-    { l: 'Kovin laukaus', v: kmh(me.shot), p: P('shot') },
-    { l: 'Luistelu / ottelu', v: me.dist ? num(me.dist / 1000, 2) + ' km' : '–', p: P('dist') },
-    ...(me.fo != null ? [{ l: 'Aloitusvoitot', v: pct(me.fo, 0), p: percentile(peers.map(x => x.fo), me.fo) }] : []),
+    { l: 'G/60', en: 'Goals per 60', fi: 'Maalit 60 peliminuuttia kohden', name: 'maalit / 60', v: num(me.g60, 2), p: P('g60') },
+    { l: 'P/60', en: 'Points per 60', fi: 'Pisteet 60 peliminuuttia kohden', name: 'pisteet / 60', v: num(me.p60, 2), p: P('p60') },
+    { l: 'xG/60', en: 'Expected Goals per 60', fi: 'Omat odotetut maalit 60 peliminuuttia kohden', name: 'xG / 60', v: num(me.xg60, 2), p: P('xg60') },
+    { l: 'iCF/60', en: 'Shot Attempts per 60', fi: 'Laukausyritykset 60 peliminuuttia kohden', name: 'laukausyritykset / 60', v: num(me.sh60, 1), p: P('sh60') },
+    { l: 'G−xG', en: 'Goals minus Expected Goals', fi: 'Viimeistely: maalit miinus odotetut maalit', name: 'viimeistely', v: signed(me.fin, 2), p: P('fin') },
+    { l: 'TOI/GP', en: 'Time on Ice per Game', fi: 'Peliaika ottelua kohden', name: 'peliaika', v: mmss(me.toiAvg), p: P('toiAvg'), use: true },
+    { l: 'PP TOI/GP', en: 'Power Play Time on Ice per Game', fi: 'Ylivoima-aika ottelua kohden', name: 'ylivoima-aika', v: mmss(me.pp), p: P('pp'), use: true },
+    { l: 'SH TOI/GP', en: 'Shorthanded Time on Ice per Game', fi: 'Alivoima-aika ottelua kohden', name: 'alivoima-aika', v: mmss(me.pk), p: P('pk'), use: true },
+    { l: 'Max Speed', en: 'Top Skating Speed', fi: 'Kauden huippunopeus', name: 'huippunopeus', v: kmh(me.speed), p: P('speed') },
+    { l: 'Max Shot', en: 'Hardest Shot', fi: 'Kauden kovin laukaus', name: 'kovin laukaus', v: kmh(me.shot), p: P('shot') },
+    { l: 'DIST/GP', en: 'Skating Distance per Game', fi: 'Luistelumatka ottelua kohden', name: 'luistelumatka', v: me.dist ? num(me.dist / 1000, 2) + ' km' : '–', p: P('dist') },
+    ...(me.fo != null ? [{ l: 'FO%', en: 'Faceoff Win Percentage', fi: 'Voitettujen aloitusten osuus', name: 'aloitukset', v: pct(me.fo, 0), p: percentile(peers.map(x => x.fo), me.fo) }] : []),
   ] : [];
   const xgfPct = (t.xgf + t.xga) ? t.xgf / (t.xgf + t.xga) : null, cfPct = (t.cf + t.ca) ? t.cf / (t.cf + t.ca) : null;
   // Strongest and weakest percentile for the summary line
   const ranked = pctRows.filter(r => r.p != null && !r.use).sort((a, b) => b.p - a.p);
-  const lead = ranked.length >= 3 ? `Vahvin osa-alue liigan ${GROUP_GEN[group]} vertailussa: <b>${ranked[0].l.toLowerCase()}</b> (${ranked[0].p}. persentiili). Heikoin: <b>${ranked[ranked.length - 1].l.toLowerCase()}</b> (${ranked[ranked.length - 1].p}.).` : '';
+  const lead = ranked.length >= 3 ? `Vahvin osa-alue liigan ${GROUP_GEN[group]} vertailussa: <b>${ranked[0].name || ranked[0].l}</b> (${ranked[0].p}. persentiili). Heikoin: <b>${ranked[ranked.length - 1].name || ranked[ranked.length - 1].l}</b> (${ranked[ranked.length - 1].p}.).` : '';
   return `
-    ${playerHero(bio, `${bigStat(n, 'ottelua')}${bigStat(`${t.g}+${t.a}`, 'pisteet')}${bigStat(num(n ? t.gs / n : null, 2), 'GS / ottelu')}${bigStat(mmss(n ? t.toi / n : 0), 'peliaika / ott.')}`)}
+    ${playerHero(bio, `${bigStat(n, 'GP', 'Games Played', 'Ottelut SaiPassa')}${bigStat(`${t.g}+${t.a}`, 'G+A', 'Goals + Assists', 'Maalit + syötöt')}${bigStat(num(n ? t.gs / n : null, 2), 'GS/GP', 'Game Score per Game', 'Pelipisteet ottelua kohden')}${bigStat(mmss(n ? t.toi / n : 0), 'TOI/GP', 'Time on Ice per Game', 'Peliaika ottelua kohden')}`)}
     <div class="card"><h2>Kausi SaiPan otteluista</h2>
       <div class="p-stats">
-        ${bigStat(t.shots, 'laukausyritystä')}${bigStat(t.sog, 'maalia kohti')}${bigStat(num(t.ixg, 2), 'xG')}
-        ${bigStat(`<span class="${cls(t.g - t.ixg)}">${signed(t.g - t.ixg, 2)}</span>`, 'G − xG')}
-        ${bigStat(pct(cfPct, 0) + (t.corsiOk ? '' : '*'), 'CF% (tasaken.)')}${bigStat(pct(xgfPct, 0), 'xGF% kentällä')}
-        ${bigStat(t.blk, 'blokkia')}${t.fot ? bigStat(pct(t.fow / t.fot, 0), `aloitukset (${t.fow}/${t.fot})`) : ''}
+        ${bigStat(t.shots, 'iCF', 'Individual Corsi For', 'Laukausyritykset')}${bigStat(t.sog, 'SOG', 'Shots on Goal', 'Laukaukset maalia kohti')}${bigStat(num(t.ixg, 2), 'xG', 'Expected Goals', 'Omat odotetut maalit')}
+        ${bigStat(`<span class="${cls(t.g - t.ixg)}">${signed(t.g - t.ixg, 2)}</span>`, 'G−xG', 'Goals minus Expected Goals', 'Viimeistely: maalit miinus odotetut maalit')}
+        ${bigStat(pct(cfPct, 0) + (t.corsiOk ? '' : '*'), 'CF%', 'Corsi For Percentage', 'Oman joukkueen osuus tasakentin laukausyrityksistä pelaajan ollessa jäällä')}${bigStat(pct(xgfPct, 0), 'xGF%', 'Expected Goals For Percentage', 'Oman joukkueen osuus maaliodottamasta pelaajan ollessa jäällä')}
+        ${bigStat(t.blk, 'BLK', 'Blocked Shots', 'Blokatut laukaukset')}${t.fot ? bigStat(pct(t.fow / t.fot, 0), 'FO%', 'Faceoff Win Percentage', `Voitetut aloitukset ${t.fow}/${t.fot}`) : ''}
       </div>
       ${t.corsiOk ? '' : '<p class="muted small">* Corsi-data on osasta otteluita puutteellista.</p>'}
     </div>
@@ -269,17 +270,17 @@ function goaliePage(id, rows, bio, league) {
     o.gp++; o.saves += a.saves; o.ga += a.ga; o.xga += a.xga;
   }
   return `
-    ${playerHero(bio, `${bigStat(played.length, `ottelua (${starts} aloitusta)`)}${bigStat(pct(sv, 1), 'torjunta-%')}${bigStat(`<span class="${cls(gsax)}">${signed(gsax, 2)}</span>`, 'GSAx')}${bigStat(num(t.toi ? t.ga / t.toi * 3600 : null, 2), 'PM / 60')}`)}
+    ${playerHero(bio, `${bigStat(played.length, 'GP', 'Games Played', `Ottelut, joista ${starts} aloittajana`)}${bigStat(pct(sv, 1), 'SV%', 'Save Percentage', 'Torjuntaprosentti')}${bigStat(`<span class="${cls(gsax)}">${signed(gsax, 2)}</span>`, 'GSAx', 'Goals Saved Above Expected', 'Odotettua enemmän torjutut maalit')}${bigStat(num(t.toi ? t.ga / t.toi * 3600 : null, 2), 'GAA', 'Goals Against Average', 'Päästetyt maalit 60 peliminuuttia kohden')}`)}
     <div class="card"><h2>GSAx kauden mittaan</h2>
       <p class="muted">Torjutut maalit yli odotusten, kertymä ottelu ottelulta. Nouseva käyrä = maalivahti torjuu enemmän kuin laukausten laatu antaisi odottaa.</p>${gsaxChart(rows)}</div>
     <div class="card"><h2><span class="tag">Liigavertailu</span></h2>
       ${me ? `<p class="lead">GSAx ${signed(me.gsax, 2)} on liigan <b>${rank}.</b> paras ${peers.length} maalivahdin joukossa (vähintään 3 ottelua).</p>
       ${pctBars([
-        { l: 'GSAx', v: signed(me.gsax, 2), p: P('gsax') },
-        { l: 'GSAx / 60', v: signed(me.gsax60, 2), p: P('gsax60') },
-        { l: 'Torjunta-%', v: pct(me.sv, 1), p: P('sv') },
-        { l: 'Päästetyt / 60', v: num(me.gaa, 2), p: P('gaa', true) },
-        { l: 'Laukauksia vastaan', v: me.shots, p: P('shots'), use: true },
+        { l: 'GSAx', en: 'Goals Saved Above Expected', fi: 'Odotettua enemmän torjutut maalit', name: 'GSAx', v: signed(me.gsax, 2), p: P('gsax') },
+        { l: 'GSAx/60', en: 'Goals Saved Above Expected per 60', fi: 'GSAx 60 peliminuuttia kohden', name: 'GSAx / 60', v: signed(me.gsax60, 2), p: P('gsax60') },
+        { l: 'SV%', en: 'Save Percentage', fi: 'Torjuntaprosentti', name: 'torjuntaprosentti', v: pct(me.sv, 1), p: P('sv') },
+        { l: 'GAA', en: 'Goals Against Average', fi: 'Päästetyt maalit 60 peliminuuttia kohden', name: 'päästetyt / 60', v: num(me.gaa, 2), p: P('gaa', true) },
+        { l: 'SA', en: 'Shots Against', fi: 'Laukaukset maalia kohti häntä vastaan', name: 'laukauksia vastaan', v: me.shots, p: P('shots'), use: true },
       ])}
       <p class="muted small">Lähde: liiga.fi:n kausitilastot (${me.gp} ottelua). Persentiili 100 = liigan paras.</p>` : '<p class="muted">Maalivahti ei ole vielä Liigan kausitilastoissa.</p>'}
     </div>

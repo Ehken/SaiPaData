@@ -962,3 +962,5 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .hst { text-align: center; }
 @media (max-width: 600px) { .hstats { grid-auto-columns: 64px; } }
 .kp-ph span[hidden], .lp-ph span[hidden] { display: none; }
+/* Stat abbreviations keep their case (iCF, xG, GSAx); uppercase labels would turn them into ICF, XG */
+.p-big > span, .lv-ptab thead th { text-transform: none; letter-spacing: .02em; }
