@@ -87,8 +87,10 @@ function showTip(e) {
   const [head, ...rest] = t.getAttribute('data-tip').split('\n');
   const parts = head.split(' · ');
   const rows = [...parts.slice(1), ...rest.flatMap(l => l.includes('\t') ? [l] : l.split(' · '))];
+  // If any value is long, every row stacks (label above value) so the rows stay consistent
+  const long = rows.some(l => (l.split('\t')[1] || '').length > 22);
   tipEl.innerHTML = `<b>${esc(parts[0])}</b>` + rows.map(l => l.includes('\t')
-    ? `<div class="tr"><span>${esc(l.split('\t')[0])}</span><em>${esc(l.split('\t')[1])}</em></div>` : `<div class="tr"><span>${esc(l)}</span></div>`).join('');
+    ? (([k, v]) => `<div class="tr${long ? ' long' : ''}"><span>${esc(k)}</span><em>${esc(v)}</em></div>`)(l.split('\t')) : `<div class="tr"><span>${esc(l)}</span></div>`).join('');
   tipEl.style.display = 'block';
   const p = e.touches ? e.touches[0] : e;
   const w = tipEl.offsetWidth, h = tipEl.offsetHeight;

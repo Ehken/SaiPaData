@@ -951,3 +951,14 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 }
 .lv-ptab tr.run th, .lv-ptab tr.run td { background: #f7f8fa; }
 .lv-ptab tr.run th small { display: block; font-size: 10.5px; font-weight: 700; color: #e53935; text-transform: uppercase; letter-spacing: .05em; }
+/* Tooltip rows: a short value sits on the label's line, a long one goes under its label and wraps */
+.tip .tr span { white-space: nowrap; }
+.tip .tr.long { display: block; padding: 3px 0; }
+.tip .tr.long span { display: block; font-size: 11.5px; }
+.tip .tr.long em { display: block; white-space: normal; }
+.tip { max-width: min(360px, calc(100vw - 16px)); }
+/* Preview hero: equal-width stat columns, so the middle stat sits exactly under the logo and team name */
+.hstats { display: grid; grid-auto-flow: column; grid-auto-columns: 92px; justify-content: center; gap: 0; }
+.hst { text-align: center; }
+@media (max-width: 600px) { .hstats { grid-auto-columns: 64px; } }
+.kp-ph span[hidden], .lp-ph span[hidden] { display: none; }

@@ -583,7 +583,7 @@ function playersBlock(t, sum, photos = new Map()) {
   const card = ({ p, k, v, sub, cls, tip }) => {
     const ph = photos.get(p.id);
     return `<div class="kp ${cls}" data-tip="${esc(tip)}">
-      <div class="kp-ph">${ph ? `<img src="${esc(ph)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span>${esc((p.first || '')[0] || '')}${esc((p.last || '')[0] || '')}</span></div>
+      <div class="kp-ph">${ph ? `<img src="${esc(ph)}" alt="" loading="lazy" onerror="this.nextElementSibling.hidden = false; this.remove()">` : ''}<span${ph ? ' hidden' : ''}>${esc((p.first || '')[0] || '')}${esc((p.last || '')[0] || '')}</span></div>
       <div class="kp-b"><div class="kp-tag">${k}</div><div class="kp-n">${esc(p.first)} ${esc(p.last)} <small>${esc(p.role)}</small></div><div class="kp-s">${sub}</div></div>
       <div class="kp-v">${v}</div>
     </div>`;
@@ -701,7 +701,7 @@ function lineupBoard(sai, opp, lineups, sSum, oSum) {
     const r = role || p.roleCode;
     const tip = `${p.firstName} ${p.lastName}\nPaikka\t${r} · #${p.jersey ?? ''}${s ? `\nTehot\t${s.g}+${s.a} = ${s.pts} p\nOttelut\t${s.gp}` : ''}${isNew ? '\nMuutos\tUusi edelliseen otteluun' : ''}`;
     return `<div class="lp ${isNew ? 'new' : ''}" data-tip="${esc(tip)}">
-      <div class="lp-ph">${p.pictureUrl ? `<img src="${esc(p.pictureUrl)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span>${esc((p.firstName || '')[0] || '')}${esc((p.lastName || '')[0] || '')}</span>${p.captain ? '<i>C</i>' : p.alternateCaptain ? '<i>A</i>' : ''}</div>
+      <div class="lp-ph">${p.pictureUrl ? `<img src="${esc(p.pictureUrl)}" alt="" loading="lazy" onerror="this.nextElementSibling.hidden = false; this.remove()">` : ''}<span${p.pictureUrl ? ' hidden' : ''}>${esc((p.firstName || '')[0] || '')}${esc((p.lastName || '')[0] || '')}</span>${p.captain ? '<i>C</i>' : p.alternateCaptain ? '<i>A</i>' : ''}</div>
       <div class="lp-t"><b>${x.t.id === SAIPA_NUM ? plink(p, esc(p.lastName)) : esc(p.lastName)}</b><small>${esc(r)} · #${p.jersey ?? ''}${s && !/MV/.test(r) ? ` · ${s.pts} p` : ''}</small></div>
     </div>`;
   };
