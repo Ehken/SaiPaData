@@ -19,12 +19,10 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); }
 body { font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.45; }
-h1, h2, h3, .brand, .tab, .score, .big { font-family: "Barlow Condensed", Inter, sans-serif; }
+h1, h2, h3, .tab, .score, .big { font-family: "Barlow Condensed", Inter, sans-serif; }
 
 .top { background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 12px; flex-wrap: wrap; border-bottom: 4px solid var(--yellow); }
-.brand { display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 800; letter-spacing: .5px; }
-.brand b { color: var(--yellow); }
-.brand-mark { background: var(--yellow); color: var(--ink); width: 32px; height: 32px; display: grid; place-items: center; border-radius: 4px; font-size: 22px; }
+.brand { font: 600 17px Inter, sans-serif; letter-spacing: 0; color: #fff; }
 .tabs { display: flex; gap: 4px; }
 .tab { background: transparent; color: #cfcfcf; border: 0; font-size: 18px; font-weight: 700; text-transform: uppercase; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
 .tab.active { background: var(--yellow); color: var(--ink); }
@@ -139,7 +137,7 @@ svg.quad text { font-family: Inter, sans-serif; }
   .scoreboard .team { font-size: 20px; }
   .scoreboard .score { font-size: 40px; }
   .tab { font-size: 16px; padding: 6px 8px; }
-  .brand { font-size: 20px; }
+  .brand { font-size: 16px; }
 }
 
 /* Period by period */
