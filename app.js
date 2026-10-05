@@ -19,12 +19,14 @@ const W = {
   gsax: 0.75, save: 0.02,
 };
 
+// Weight as Finnish decimal for the component formulas shown in hovers
+const wf = x => String(x).replace('.', ',');
 const COMPONENTS = [
-  { key: 'tulos', label: 'Tulos', d: 'maalit, syötöt', tip: 'Maalit, ensisyötöt, toissyötöt', color: 'var(--c-tulos)' },
-  { key: 'tuotanto', label: 'Tuotanto', d: 'laukaukset, xG', tip: 'Laukaukset maalia kohti, maaliodottama', color: 'var(--c-tuotanto)' },
-  { key: 'hallinta', label: 'Hallinta', d: 'Corsi, maaliero kentällä', tip: 'Laukausyritysten ero, maaliero kentällä', color: 'var(--c-hallinta)' },
-  { key: 'puolustus', label: 'Puolustus', d: 'blokit', tip: 'Blokit', color: 'var(--c-puolustus)' },
-  { key: 'muut', label: 'Muut', d: 'aloitukset, jäähyt', tip: 'Voitetut ja hävityt aloitukset, jäähyt', color: 'var(--c-muut)' },
+  { key: 'tulos', label: 'Tulos', d: 'maalit, syötöt', tip: `${wf(W.goal)} × G + ${wf(W.a1)} × A1 + ${wf(W.a2)} × A2`, color: 'var(--c-tulos)' },
+  { key: 'tuotanto', label: 'Tuotanto', d: 'laukaukset, xG', tip: `${wf(W.shot)} × SOG + ${wf(W.ixg)} × xG`, color: 'var(--c-tuotanto)' },
+  { key: 'hallinta', label: 'Hallinta', d: 'Corsi, maaliero kentällä', tip: `${wf(W.corsi)} × (CF − CA) + ${wf(W.evGoal)} × (GF − GA)`, color: 'var(--c-hallinta)' },
+  { key: 'puolustus', label: 'Puolustus', d: 'blokit', tip: `${wf(W.block)} × BLK`, color: 'var(--c-puolustus)' },
+  { key: 'muut', label: 'Muut', d: 'aloitukset, jäähyt', tip: `${wf(W.foWon)} × FOW − ${wf(-W.foLost)} × (FO − FOW) − ${wf(-W.minor)} × PIM / 2`, color: 'var(--c-muut)' },
 ];
 
 /* ---------- helpers ---------- */
