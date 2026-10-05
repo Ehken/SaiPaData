@@ -313,3 +313,54 @@ async function renderSeasonForecast(el, stn) {
   };
   draw();
 }
+
+/* ---------- PR-9: accuracy of the forecasts saved before each game ---------- */
+// data/forecasts.json is written hourly by .github/workflows/forecast-snapshot.yml: { season: { gameId: { s, h, a, H, T, A, lh, la, at } } }
+let fcTrackDone = false;
+async function renderForecastTrack(el) {
+  if (!el || fcTrackDone) return;
+  fcTrackDone = true;
+  const title = '<h2>Ennusteiden osumatarkkuus</h2>';
+  const saved = await fetch('data/forecasts.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  const mine = saved[SEASON] || {};
+  const [s1, s0] = await Promise.all([SEASON - 1, SEASON].map(y => getJSON(`/schedule?tournament=${TOURNAMENT}&season=${y}`).catch(() => [])));
+  const byId = new Map(s0.map(g => [String(g.id), g]));
+  const done = Object.entries(mine).map(([id, f]) => ({ f, g: byId.get(id) })).filter(x => x.g?.ended).sort((a, b) => a.g.start.localeCompare(b.g.start));
+  const intro = '<p class="muted">Ennuste tallennetaan ennen jokaista ottelua, eikä sitä muuteta jälkikäteen. Tässä verrataan tallennettuja ennusteita toteutuneisiin tuloksiin.</p>';
+  if (!done.length) { el.innerHTML = `${title}${intro}<p class="muted">Tallennettuja ennusteita ei ole vielä pelatuista otteluista.</p>`; return; }
+  // Baseline: last season's share of home wins, ties after 60 minutes and away wins
+  const base = { H: 0, T: 0, A: 0 }, pp = fcPlayed(s1);
+  for (const g of pp) base[fcResult(g)]++;
+  for (const k in base) base[k] /= pp.length || 1;
+  const bs = (p, o) => ['H', 'T', 'A'].reduce((s, k) => s + (p[k] - (o === k ? 1 : 0)) ** 2, 0);
+  let m = 0, b = 0, hit = 0, dec = 0;
+  const bins = [[0, 0.3], [0.3, 0.4], [0.4, 0.5], [0.5, 0.6], [0.6, 1.01]].map(([lo, hi]) => ({ lo, hi, n: 0, p: 0, w: 0 }));
+  for (const { f, g } of done) {
+    const o = fcResult(g);
+    m += bs(f, o); b += bs(base, o);
+    if (o !== 'T') { dec++; if ((f.H > f.A) === (o === 'H')) hit++; }
+    // Calibration on the favourite of each game: its predicted chance to win in 60 minutes vs. how often it did
+    const fav = f.H >= f.A ? 'H' : 'A', pf = f[fav], bin = bins.find(x => pf >= x.lo && pf < x.hi);
+    bin.n++; bin.p += pf; bin.w += o === fav ? 1 : 0;
+  }
+  const n = done.length, gain = 1 - m / b;
+  const chip = (k, v, tip) => `<span class="chip" data-tip="${esc(tip)}"><small>${k}</small><b>${v}</b></span>`;
+  const chips = `<div class="chips">
+    ${chip('Ottelut', n, 'Pelatut ottelut, joille ennuste tallennettiin etukäteen')}
+    ${chip('Suosikki voitti', pct(hit / Math.max(1, dec), 0), `Otteluista, jotka ratkesivat 60 minuutissa (${dec}), ennusteen suosikki voitti näin monta`)}
+    ${chip('Parempi kuin keskiarvot', `${gain >= 0 ? '' : '−'}${pct(Math.abs(gain), 0)}`, `Kuinka paljon ennuste osuu paremmin kuin pelkät viime kauden keskiarvot (kotivoitto ${pct(base.H, 0)}, tasan ${pct(base.T, 0)}, vierasvoitto ${pct(base.A, 0)}) jokaiseen otteluun\nBrier-pisteinä: malli ${num(m / n, 3)}, keskiarvot ${num(b / n, 3)}, pienempi on parempi`)}
+  </div>`;
+  const binRows = bins.filter(x => x.n).map(x => `<tr><td>${Math.round(x.lo * 100)}–${x.hi > 1 ? 100 : Math.round(x.hi * 100)} %</td><td>${x.n}</td><td>${pct(x.p / x.n, 0)}</td><td><b>${pct(x.w / x.n, 0)}</b></td></tr>`).join('');
+  const calib = `<h3>Pitävätkö prosentit paikkansa?</h3>
+    <p class="muted small">Jos suosikin voittotodennäköisyys on 60 %, suosikin pitäisi voittaa noin 60 % tällaisista otteluista. Pienillä otosmäärillä heittoa on paljon.</p>
+    <div class="tablewrap"><table class="mini"><tr><th>Suosikin ennuste</th><th>Ottelut</th><th>Ennuste keskimäärin</th><th>Suosikki voitti</th></tr>${binRows}</table></div>`;
+  const sai = done.filter(x => teamNum(x.g.homeTeamId) === SAIPA_NUM || teamNum(x.g.awayTeamId) === SAIPA_NUM).reverse();
+  const saiRows = sai.map(({ f, g }) => {
+    const home = teamNum(g.homeTeamId) === SAIPA_NUM, o = fcResult(g), w = home ? f.H : f.A, l = home ? f.A : f.H;
+    const res = `${g.homeTeamGoals}–${g.awayTeamGoals}${o === 'T' ? (g.finishedType === 'ENDED_DURING_WINNING_SHOT_COMPETITION' ? ' VL' : ' JA') : ''}`;
+    const won = g.homeTeamGoals > g.awayTeamGoals === home;
+    return `<tr><td>${fiDate(g.start)}</td><td>${esc(`${g.homeTeamName}–${g.awayTeamName}`)}</td><td>${pct(w, 0)}</td><td>${pct(f.T, 0)}</td><td>${pct(l, 0)}</td><td class="${won ? 'pos-num' : 'neg-num'}"><b>${res}</b></td></tr>`;
+  }).join('');
+  const saiHtml = sai.length ? `<h3>SaiPan ottelut</h3><div class="tablewrap"><table class="mini"><tr><th>Pvm</th><th>Ottelu</th><th data-tip="SaiPan voitto 60 minuutissa">Voitto</th><th data-tip="Tasan 60 minuutin jälkeen">Tasan</th><th data-tip="SaiPan tappio 60 minuutissa">Tappio</th><th>Tulos</th></tr>${saiRows}</table></div>` : '';
+  el.innerHTML = `${title}${intro}${chips}${calib}${saiHtml}`;
+}

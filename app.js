@@ -1207,6 +1207,7 @@ function show(view, push = false) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
   if (view === 'kausi') renderSeason();
   if (view === 'historia') renderHistory();
+  if (view === 'info' && typeof renderForecastTrack === 'function') renderForecastTrack($('#fcTrack'));
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.view, true));
 // Back / Forward: redraw the view the address points to

@@ -1,0 +1,41 @@
+# Saves every upcoming game's pre-game forecast once an hour (see scripts/forecast-snapshot.mjs).
+# The forecasts live on their own branch "forecasts" (one file, history not kept), so these automatic
+# saves never touch main. When something changed, the site is republished with the new file included.
+name: Forecast snapshot
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # push the forecasts branch
+  actions: write    # start the publish workflow
+
+concurrency:
+  group: forecast-snapshot
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5   # the runner's preinstalled Node runs the script
+      - name: Load saved forecasts
+        run: |
+          mkdir -p store
+          if git fetch -q --depth=1 origin forecasts; then git show origin/forecasts:forecasts.json > store/forecasts.json; fi
+          if [ -s store/forecasts.json ]; then cp store/forecasts.json old.json; else echo '{}' > store/forecasts.json; echo '{}' > old.json; fi
+      - name: Save forecasts of upcoming games
+        run: node scripts/forecast-snapshot.mjs store/forecasts.json
+      - name: Store and republish if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if cmp -s store/forecasts.json old.json; then echo "No changes"; exit 0; fi
+          cd store
+          git init -q -b forecasts
+          git add forecasts.json
+          git -c user.name="github-actions[bot]" -c user.email="41898283+github-actions[bot]@users.noreply.github.com" commit -qm "Forecast snapshot"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" forecasts
+          cd ..
+          gh workflow run pages.yml --ref main

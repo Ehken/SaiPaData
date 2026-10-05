@@ -7,6 +7,17 @@
 <title>SaiPa-data</title>
 <meta name="description" content="SaiPa-painotteinen jääkiekkotilastosivu: ottelun ennakko, raportti ja live-seuranta, kausi, historia. Data liiga.fi:stä.">
 <meta name="theme-color" content="#111111">
+<!-- Link previews (WhatsApp, Slack, iMessage…). Crawlers do not run scripts, so every page shares this one card. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SaiPa-data">
+<meta property="og:title" content="SaiPa-data">
+<meta property="og:description" content="Ennakot, live-seuranta, otteluraportit, kausitilastot ja historia. Data liiga.fi:stä.">
+<meta property="og:url" content="https://ehken.github.io/SaiPaData/">
+<meta property="og:image" content="https://ehken.github.io/SaiPaData/data/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="fi_FI">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=dev">
@@ -45,6 +56,7 @@
   </section>
 
   <section id="view-info" class="view">
+    <div class="card" id="fcTrack"><h2>Ennusteiden osumatarkkuus</h2><p class="loading">Haetaan…</p></div>
     <div class="card prose">
       <h2>Miten luvut lasketaan</h2>
       <p class="muted">Data: liiga.fi:n rajapinta. Kaikki luvut lasketaan selaimessa joka latauksella.</p>

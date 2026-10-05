@@ -46,3 +46,5 @@ All data comes from the liiga.fi API (unofficial and undocumented, may change wi
 ## Publishing
 
 Pushing to `main` publishes the site with GitHub Actions (`.github/workflows/pages.yml`). The workflow stamps the commit id into the `?v=` of every script and stylesheet so browsers never mix cached old files with new ones. One-time setup: repository Settings → Pages → Source: GitHub Actions.
+
+Forecast tracking: `.github/workflows/forecast-snapshot.yml` runs every hour and saves the pre-game forecast of each upcoming game (`scripts/forecast-snapshot.mjs`, using the site's own `forecast.js`). The saved file lives on the `forecasts` branch, so the automatic saves never touch `main`; the publish workflow copies it to `data/forecasts.json`. The Mittarit page compares the saved forecasts with the results.
