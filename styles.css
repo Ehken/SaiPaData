@@ -939,7 +939,7 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
   .lv-head { gap: 4px 10px; padding: 8px 12px; margin: -14px -16px 10px; }
   .lv-head b { font-size: 21px; }
   .lv-head > span { font-size: 13px; }
-  .lv-head .lv-stamp { display: none; }
+  .lv-head .lv-stamp { display: inline; margin-left: auto; font-size: 11px; }
   .lv-head .lv-now { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; min-height: 36px; margin-top: 2px; padding-bottom: 0; }
   .lv-head .lv-now::-webkit-scrollbar { display: none; }
   .lv-now-i { flex: 0 0 auto; white-space: nowrap; padding: 5px 10px 7px; gap: 7px; }
@@ -993,3 +993,12 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .kp-out { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #3a3a38; color: #fff; font-size: 10px; letter-spacing: .04em; vertical-align: 1px; }
 .kp.out { filter: none; opacity: 1; background: #f4f4f2; }
 .kp.out .kp-ph, .kp.out .kp-n, .kp.out .kp-s, .kp.out .kp-v { filter: grayscale(1); opacity: .55; }
+/* Ice time: no outline on the current period (it boxed every bar early in the game), lighter first-period shade */
+.lv-ice i.now { box-shadow: none; }
+.lv-ice .p1, .lv-ice-leg .p1 { background: #b8920b; }
+/* Periods table on a phone: tighter cells so most columns fit; the rest scrolls inside the card */
+@media (max-width: 600px) {
+  .lv-ptab th, .lv-ptab td { padding: 6px 6px; }
+  .lv-ptab td { font-size: 18px; } .lv-ptab td.lv-star { font-size: 16px; }
+  .lv-ptab thead th { font-size: 11px; }
+}

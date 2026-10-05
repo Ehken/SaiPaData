@@ -563,8 +563,8 @@ function keyPicks(sum, avail = null) {
   // Regulars are judged over the whole squad, so an injured regular's streak can still be shown (greyed)
   const top9 = new Set([...all].sort((a, b) => b.toi / b.gp - a.toi / a.gp).slice(0, 9).map(p => p.id));
   const dd = p => { const d = p.lastPt ? new Date(p.lastPt) : null; return d ? `viimeisin piste ${d.getDate()}.${d.getMonth() + 1}.` : 'ei pisteitä tällä kaudella'; };
-  // Each card shows a different player. When the category leader is already on an earlier card, the next one is
-  // shown and the tag says the team rank; the hover always lists the top three.
+  // Each card shows a different player. When the category leader is already on an earlier card (or is not
+  // playing tonight), the next one is shown; the hover always lists the top three.
   const CATS = [
     ['🏆 Kultakypärä', '', [...ps].sort((a, b) => b.pts - a.pts || b.g - a.g || b.ixg - a.ixg), p => `${p.pts} p`, p => `${p.g}+${p.a} · ${p.gp} ott.`, 'Eniten pisteitä'],
     ['🔥 Kuumin juuri nyt', 'hot', ps.filter(p => p.l5 >= 2).sort((a, b) => b.l5 - a.l5 || b.pts - a.pts), p => `${p.l5} p`, p => `5 viime ott. · kausi ${p.pts} p`, 'Eniten pisteitä viidessä viime ottelussa'],
@@ -583,7 +583,7 @@ function keyPicks(sum, avail = null) {
     used.add(p.id);
     const tip = [k, rule, ...list.slice(0, 3).map((x, n) => `${n + 1}. ${x.first} ${x.last}\t${v(x)}`)].join('\n');
     const out = !isAv(p);
-    picks.push({ p, k: (i && !out ? `${k} <span class="kp-rk">· joukkueen ${i + 1}.</span>` : k) + (out ? ' <span class="kp-out">Ei kokoonpanossa</span>' : ''), v: v(p), sub: sub(p), out, cls: out ? `${cls} out` : cls, tip: out ? `${tip}\nEi pelaa tänään, joten putki ei voi katketa` : tip });
+    picks.push({ p, k: k + (out ? ' <span class="kp-out">Ei kokoonpanossa</span>' : ''), v: v(p), sub: sub(p), out, cls: out ? `${cls} out` : cls, tip: out ? `${tip}\nEi pelaa tänään, joten putki ei voi katketa` : tip });
   }
   // No cold streak among the regulars is news too: say so instead of dropping the card
   if (!picks.some(x => x.cls.startsWith('cold')) && top9.size) {

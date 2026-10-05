@@ -1223,10 +1223,4 @@ window.addEventListener('DOMContentLoaded', () => {
 $('#updated').textContent = 'Päivitetty ' + new Date().toLocaleString('fi-FI', { dateStyle: 'short', timeStyle: 'short' });
 initGames()
   .then(() => Promise.all(saipaGames.map(g => loadGame(g.id))))
-  .then(games => runReconcile(games))
-  .then(r => {
-    const t = new Date().toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
-    const msg = r.error ? 'Täsmäytys epäonnistui' : r.diffs.length ? `Täsmäytyksessä ${r.diffs.length} poikkeamaa (katso Kausi)` : `Data täsmätty liiga.fi:n tilastoihin klo ${t}`;
-    $('#updated').textContent += ' · ' + msg;
-  })
   .catch(e => { if (!saipaGames.length) $('#gameContent').innerHTML = `<p class="neg-num">Otteluohjelman lataus epäonnistui: ${esc(e.message)}</p>`; });
