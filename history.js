@@ -108,7 +108,10 @@ function loadHistoryGames() {
   histGamesP.catch(() => { histGamesP = null; });
   return histGamesP;
 }
-const fiMD = iso => new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' }).slice(5);
+const fiYMD = iso => new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
+const fiMD = iso => fiYMD(iso).slice(5);
+// ?date=YYYY-MM-DD: "this day in history" for another day, as if it were that day (not linked from the UI)
+const HIST_DATE = (() => { const d = new URLSearchParams(location.search).get('date'); return /^\d{4}-\d{2}-\d{2}$/.test(d || '') && !isNaN(new Date(d)) ? d : null; })();
 const sfx = ft => ft === 'ENDED_DURING_EXTENDED_GAME_TIME' ? ' JA' : ft === 'ENDED_DURING_WINNING_SHOT_COMPETITION' ? ' VL' : '';
 
 async function renderHistory() {
@@ -135,21 +138,21 @@ async function renderHistory() {
 
 /* ---------- HI-1: this day in SaiPa history ---------- */
 async function todayHtml(games) {
-  const today = fiMD(Date.now());
-  let pick = games.filter(g => fiMD(g.start) === today && g.season < SEASON + 1 && new Date(g.start) < new Date(new Date().toDateString()));
+  const refDay = HIST_DATE || fiYMD(Date.now()), today = refDay.slice(5), isToday = refDay === fiYMD(Date.now());
+  let pick = games.filter(g => fiMD(g.start) === today && g.season < SEASON + 1 && fiYMD(g.start) < refDay);
   let note = '';
   if (!pick.length) {
     // No game on this date: show the nearest dates within a week
     const md = d => { const [m, dd] = d.split('-').map(Number); return m * 31 + dd; };
     const t = md(today);
-    const near = games.map(g => ({ g, d: Math.abs(md(fiMD(g.start)) - t) })).filter(x => x.d > 0 && x.d <= 7).sort((a, b) => a.d - b.d);
+    const near = games.filter(g => fiYMD(g.start) < refDay).map(g => ({ g, d: Math.abs(md(fiMD(g.start)) - t) })).filter(x => x.d > 0 && x.d <= 7).sort((a, b) => a.d - b.d);
     if (near.length) { const d = near[0].d; pick = near.filter(x => x.d === d).map(x => x.g); note = `Tällä päivämäärällä ei ole pelattu SaiPan Liiga-otteluita. Lähin päivämäärä: ${fiDate(pick[0].start)}.`; }
   }
   if (!pick.length) return '<p class="muted">Tältä ajankohdalta ei löydy SaiPan Liiga-otteluita.</p>';
   const chrono = [...pick].sort((a, b) => a.start.localeCompare(b.start));
   const res = g => g.gf > g.ga ? 'w' : g.gf < g.ga ? 'l' : 't';
   const yr = g => new Date(g.start).getFullYear();
-  const now = new Date().getFullYear();
+  const now = +refDay.slice(0, 4);
   const total = chrono.length, wins = chrono.filter(g => res(g) === 'w').length, losses = chrono.filter(g => res(g) === 'l').length;
   const gf = chrono.reduce((a, g) => a + g.gf, 0), ga = chrono.reduce((a, g) => a + g.ga, 0);
   // Current run on this date, newest first
@@ -175,11 +178,13 @@ async function todayHtml(games) {
   const scTip = ['🚨 Eniten maaleja tällä päivämäärällä', ...scList.filter(x => x[1] >= Math.min(topN, 2)).slice(0, 8).map(([n, c]) => `${n}\t${c} G`)].join('\n');
   // SaiPa playing today?
   const cur = await getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`).catch(() => []);
-  const todayG = note ? null : cur.find(g => fiMD(g.start) === today && !g.ended && new Date(g.start).toDateString() === new Date().toDateString() && (teamNum(g.homeTeamId) === SAIPA_NUM || teamNum(g.awayTeamId) === SAIPA_NUM));
+  const todayG = note || !isToday ? null : cur.find(g => fiMD(g.start) === today && !g.ended && new Date(g.start).toDateString() === new Date().toDateString() && (teamNum(g.homeTeamId) === SAIPA_NUM || teamNum(g.awayTeamId) === SAIPA_NUM));
   const marginTile = (ic, k, list, tone) => {
     const g = list[0], more = list.length > 1 ? ` +${list.length - 1}` : '';
     const tip = [`${ic} ${k}`, ...list.map(x => `${yr(x)}\t${score(x)}`)].join('\n');
-    return tile(ic, k, signed(g.gf - g.ga, 0), '', null, esc(`${yr(g)} · ${score(g)}${more}`), tone, tip);
+    // Big number = the result (home team first), bottom line = year and the matchup
+    const res2 = g.home ? `${g.gf}–${g.ga}` : `${g.ga}–${g.gf}`, pair = g.home ? `SaiPa–${g.opp}` : `${g.opp}–SaiPa`;
+    return tile(ic, k, res2, sfx(g.ft).trim(), null, esc(`${yr(g)} · ${pair}${more}`), tone, tip);
   };
   const runWord = { w: ['voittoa', 'Voittoputki'], l: ['tappiota', 'Tappioputki'], t: ['tasapeliä', 'Tasapeliputki'] }[runRes];
   const T = [

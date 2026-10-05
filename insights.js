@@ -2,80 +2,103 @@
  * season trend (SE-3) and streaks (PL-3). Uses helpers from app.js, shots.js, preview.js and player.js. */
 
 /* ---------- LN-1: lines and pairs from goal events ---------- */
-// Goal events list the jersey numbers of the skaters on ice: plusPlayerIds for the scoring team,
-// minusPlayerIds for the conceding team. The listed lines come from the game roster.
+// The only exact on-ice data in the API: every goal lists the jersey numbers of the skaters on ice
+// (plusPlayerIds for the scoring team, minusPlayerIds for the conceding team). Shots carry only a player count.
+// So every figure here is exact: a unit is counted only when ALL its players were on ice for the goal.
 const FWD = ['VL', 'KH', 'OL'], DEF = ['VP', 'OP'];
 const jerseys = s => String(s || '').split(/\s+/).filter(Boolean).map(Number);
 const isEvGoal = e => !(e.goalTypes || []).some(t => /^(YV|AV)/.test(t));
+const goalSit = e => (e.goalTypes || []).some(t => /^YV/.test(t)) ? 'pp' : (e.goalTypes || []).some(t => /^AV/.test(t)) ? 'sh' : 'ev';
 
 function lineStats(raws) {
-  const units = new Map(), duos = new Map(), names = new Map();
-  const unit = (kind, ids) => {
-    const key = kind + ':' + [...ids].sort((a, b) => a - b).join('-');
-    return units.get(key) || units.set(key, { key, kind, ids, gp: 0, gf: 0, ga: 0, lines: new Set() }).get(key);
-  };
+  const units = new Map(), fives = new Map(), duos = new Map(), names = new Map();
+  const key = ids => [...ids].sort((a, b) => a - b).join('-');
+  const unit = (kind, ids) => { const k = kind + ':' + key(ids); return units.get(k) || units.set(k, { key: k, kind, ids, gp: 0, lines: new Set(), ev: [0, 0], pp: [0, 0], sh: [0, 0], own: 0, all: 0 }).get(k); };
   let goals = 0, missing = 0;
   for (const { g } of raws) {
     const home = isSaipa(g.game.homeTeam.teamId);
     const roster = (home ? g.homeTeamPlayers : g.awayTeamPlayers) || [];
     const byJersey = new Map(roster.filter(p => p.line != null).map(p => [p.jersey, p]));
     for (const p of roster) names.set(p.id, p.lastName);
-    // Listed units of this game
     const listed = [];
     for (const n of [1, 2, 3, 4]) {
       const f = FWD.map(r => roster.find(p => p.line === n && p.roleCode === r)).filter(Boolean);
       const d = DEF.map(r => roster.find(p => p.line === n && p.roleCode === r)).filter(Boolean);
-      if (f.length === 3) { const u = unit('F', f.map(p => p.id)); u.gp++; u.lines.add(n); listed.push({ u, ids: new Set(u.ids), need: 2 }); }
-      if (d.length === 2) { const u = unit('D', d.map(p => p.id)); u.gp++; u.lines.add(n); listed.push({ u, ids: new Set(u.ids), need: 2 }); }
+      if (f.length === 3) { const u = unit('F', f.map(p => p.id)); u.gp++; u.lines.add(n); listed.push(u); }
+      if (d.length === 2) { const u = unit('D', d.map(p => p.id)); u.gp++; u.lines.add(n); listed.push(u); }
     }
     const mine = home ? g.game.homeTeam : g.game.awayTeam, opp = home ? g.game.awayTeam : g.game.homeTeam;
     for (const [team, scored] of [[mine, true], [opp, false]]) for (const e of team.goalEvents || []) {
-      if (!validGoal(e) || !isEvGoal(e)) continue;
-      const onIce = jerseys(scored ? e.plusPlayerIds : e.minusPlayerIds).map(j => byJersey.get(j)).filter(p => p && p.roleCode !== 'MV').map(p => p.id);
-      if (!onIce.length) { missing++; continue; }
+      if (!validGoal(e)) continue;
+      const sk = jerseys(scored ? e.plusPlayerIds : e.minusPlayerIds).map(j => byJersey.get(j)).filter(p => p && p.roleCode !== 'MV');
+      if (!sk.length) { missing++; continue; }
       goals++;
-      const set = new Set(onIce);
-      // A forward line counts as on ice when at least two of its three forwards are; a pair when both are.
-      for (const l of listed) {
-        if ([...l.ids].filter(id => set.has(id)).length >= l.need) { if (scored) l.u.gf++; else l.u.ga++; }
+      // From SaiPa's side: a power-play goal by the opponent is a SaiPa penalty-kill goal against, and vice versa
+      const sit0 = goalSit(e), sit = scored ? sit0 : sit0 === 'pp' ? 'sh' : sit0 === 'sh' ? 'pp' : 'ev';
+      const on = new Set(sk.map(p => p.id));
+      const pointIds = scored ? [e.scorerPlayerId, ...(e.assistantPlayerIds || [])] : [];
+      for (const u of listed) {
+        if (sit !== 'ev' || !u.ids.every(id => on.has(id))) continue;
+        u[sit][scored ? 0 : 1]++;
+        if (scored && u.ids.includes(e.scorerPlayerId)) u.own++;
+        if (scored && pointIds.filter(id => u.ids.includes(id)).length >= Math.min(3, u.ids.length)) u.all++;
       }
-      for (let i = 0; i < onIce.length; i++) for (let j = i + 1; j < onIce.length; j++) {
-        const a = Math.min(onIce[i], onIce[j]), b = Math.max(onIce[i], onIce[j]), key = a + '-' + b;
-        const d = duos.get(key) || duos.set(key, { a, b, gf: 0, ga: 0 }).get(key);
+      // Five-man units (exactly the skaters on ice) at even strength, and pairs of any two skaters
+      if (sit === 'ev' && sk.length === 5) {
+        const k = key(on), f = fives.get(k) || fives.set(k, { ids: [...on], gf: 0, ga: 0 }).get(k);
+        if (scored) f.gf++; else f.ga++;
+      }
+      if (sit !== 'ev') continue;
+      const ids = [...on];
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const a = Math.min(ids[i], ids[j]), b = Math.max(ids[i], ids[j]), k = a + '-' + b;
+        const d = duos.get(k) || duos.set(k, { a, b, gf: 0, ga: 0 }).get(k);
         if (scored) d.gf++; else d.ga++;
       }
     }
   }
-  return { units: [...units.values()], duos: [...duos.values()], names, goals, missing };
+  return { units: [...units.values()], fives: [...fives.values()], duos: [...duos.values()], names, goals, missing };
 }
 
 function linesHtml(x) {
   const nm = id => esc(x.names.get(id) || '?');
-  const who = u => u.ids.map(id => plink({ id }, nm(id))).join(' – ');
-  const row = u => {
-    const d = u.gf - u.ga, share = (u.gf + u.ga) ? u.gf / (u.gf + u.ga) : null;
-    return `<tr><td>${who(u)}</td><td>${[...u.lines].map(n => n + '.').join(', ')}</td><td>${u.gp}</td><td>${u.gf}–${u.ga}</td>
-      <td><span class="${cls(d)}">${signed(d, 0)}</span></td><td>${share == null ? '–' : pct(share, 0)}</td></tr>`;
+  const who = ids => ids.map(id => plink({ id }, nm(id))).join(' – ');
+  const pair = ([f, a]) => `${f}–${a}`;
+  // One card per unit: even-strength goals for–against as the headline, the rest as small facts
+  const card = u => {
+    const d = u.ev[0] - u.ev[1], gf = u.ev[0];
+    const facts = [
+      gf ? `<span data-tip="${esc(`Maaleista ${u.own}/${gf} teki ${u.kind === 'F' ? 'ketjun' : 'parin'} oma pelaaja`)}">omat ${u.own}/${gf}</span>` : '',
+      u.all ? `<span data-tip="${esc(u.kind === 'F' ? 'Maalit, joissa kaikki kolme saivat pisteen' : 'Maalit, joissa molemmat saivat pisteen')}">${u.kind === 'F' ? 'koko kolmikko' : 'molemmat'} ${u.all}</span>` : '',
+    ].filter(Boolean).join('');
+    return `<div class="ln-c ${d > 0 ? 'pos' : d < 0 ? 'neg' : ''}${u.gp < 2 ? ' few' : ''}">
+      <div class="ln-h"><div class="ln-who">${who(u.ids)}</div><div class="ln-meta">${[...u.lines].map(n => n + '.').join(', ')} ${u.kind === 'F' ? 'ketju' : 'pari'} · ${u.gp} ott.</div></div>
+      <div class="ln-v" data-tip="${esc(`Tasakentin tehdyt–päästetyt maalit, kun koko ${u.kind === 'F' ? 'ketju' : 'pari'} oli jäällä`)}"><b>${pair(u.ev)}</b><small>${d ? signed(d, 0) : '±0'}</small></div>
+      <div class="ln-f">${facts}</div></div>`;
   };
-  const tbl = (kind, title) => {
-    const rows = x.units.filter(u => u.kind === kind && u.gp >= 2).sort((a, b) => (b.gf - b.ga) - (a.gf - a.ga) || b.gp - a.gp);
-    return `<h3>${title}</h3><div class="tablewrap"><table class="mini ln-t"><tr><th>Pelaajat</th><th data-tip="Line Number\nKetjun numero kokoonpanossa">Line</th><th data-tip="Games Played\nYhteiset ottelut">GP</th><th data-tip="Goals For – Against\nTasakentin maalit puolesta–vastaan yksikön ollessa jäällä">GF–GA</th><th data-tip="Goal Differential\nMaaliero">+/-</th><th data-tip="Goals For Percentage\nOman joukkueen osuus maaleista">GF%</th></tr>${rows.map(row).join('') || '<tr><td colspan="6" class="muted">Ei vielä vähintään kahta yhteistä ottelua.</td></tr>'}</table></div>`;
+  const list = (kind, title) => {
+    const rows = x.units.filter(u => u.kind === kind && (u.gp >= 2 || u.ev[0] + u.ev[1] > 0))
+      .sort((a, b) => (b.ev[0] - b.ev[1]) - (a.ev[0] - a.ev[1]) || b.ev[0] - a.ev[0] || b.gp - a.gp);
+    return `<h3>${title}</h3><div class="ln-list">${rows.map(card).join('') || '<p class="muted small">Ei vielä dataa.</p>'}</div>`;
   };
+  // Five-man units: the exact five skaters on ice for at least 3 even-strength goals
+  const fives = x.fives.filter(f => f.gf + f.ga >= 3).sort((a, b) => (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf).slice(0, 6);
+  const fiveHtml = fives.length ? `<h3>Viisikot <small class="muted">tasakentin, vähintään 3 maalia jäällä</small></h3><ol class="duo">${fives.map(f => `<li><span>${who(f.ids)}</span><b class="${cls(f.gf - f.ga)}" data-tip="Tasakentin tehdyt–päästetyt maalit, kun koko viisikko oli jäällä">${f.gf}–${f.ga}</b></li>`).join('')}</ol>` : '';
   const duos = x.duos.filter(d => d.gf + d.ga >= 5);
   const best = duos.filter(d => d.gf > d.ga).sort((a, b) => (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf).slice(0, 5);
   const worst = duos.filter(d => d.gf < d.ga).sort((a, b) => (a.gf - a.ga) - (b.gf - b.ga) || b.ga - a.ga).slice(0, 5);
-  const duoList = (arr, kind) => !arr.length ? '<p class="muted small">Ei vielä yhtään.</p>' : `<ol class="duo ${kind}">${arr.map(d => `<li><span>${plink({ id: d.a }, nm(d.a))} + ${plink({ id: d.b }, nm(d.b))}</span><b class="${cls(d.gf - d.ga)}">${d.gf}–${d.ga}</b></li>`).join('')}</ol>`;
-  const top = x.units.filter(u => u.kind === 'F' && u.gp >= 2).sort((a, b) => (b.gf - b.ga) - (a.gf - a.ga))[0];
+  const duoList = (arr, kind) => !arr.length ? '<p class="muted small">Ei vielä yhtään.</p>' : `<ol class="duo ${kind}">${arr.map(d => `<li><span>${plink({ id: d.a }, nm(d.a))} + ${plink({ id: d.b }, nm(d.b))}</span><b class="${cls(d.gf - d.ga)}" data-tip="Tasakentin tehdyt–päästetyt maalit, kun molemmat olivat jäällä">${d.gf}–${d.ga}</b></li>`).join('')}</ol>`;
   return `
     <div class="grid2 flat">
-      <div>${tbl('F', 'Hyökkäysketjut')}</div>
-      <div>${tbl('D', 'Puolustusparit')}</div>
+      <div>${list('F', 'Hyökkäysketjut')}</div>
+      <div>${list('D', 'Puolustusparit')}</div>
     </div>
+    ${fiveHtml}
     <div class="grid2 flat">
-      <div><h3>Parhaat kaksikot</h3>${duoList(best, 'good')}</div>
-      <div><h3>Heikoimmat kaksikot</h3>${duoList(worst, 'bad')}</div>
+      <div><h3>Parhaat kaksikot <small class="muted">tasakentin</small></h3>${duoList(best, 'good')}</div>
+      <div><h3>Heikoimmat kaksikot <small class="muted">tasakentin</small></h3>${duoList(worst, 'bad')}</div>
     </div>
-    <p class="muted small">Tasakentin maalit yksikön ollessa jäällä · ketju = vähintään 2/3 hyökkääjästä · vähintään 2 yhteistä ottelua · kaksikot: vähintään 5 maalia · ${x.goals} maalia${x.missing ? ` (${x.missing} ilman kentällä olleita)` : ''}</p>`;
+    <p class="muted small">Luvut ovat tarkkoja: yksikkö lasketaan vain, kun kaikki sen pelaajat olivat jäällä maalin hetkellä (Liigan maalitapahtumien kentällä olleet pelaajat). Mukana tasakentin maalit: ylivoima- ja alivoimamaaleihin Liiga ei merkitse kentällä olleita, eikä laukauksiin koskaan. · ${x.goals} maalia, joista tiedossa kentällä olleet</p>`;
 }
 
 /* ---------- PL-5: fastest skaters and hardest shots in the league ---------- */

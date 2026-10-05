@@ -405,7 +405,7 @@ function deservedHtmlSeason(rows) {
   return `
     ${s ? `<div class="chips"><span class="chip"><small>SaiPa</small><b>${s.rank}.</b></span><span class="chip"><small>xRank</small><b>${s.xrank}.</b></span><span class="chip"><small>PTS − xPTS</small><b class="${cls(s.diff)}">${signed(s.diff, 1)}</b></span></div>` : ''}
     <div class="tablewrap"><table class="dsv">
-      <tr><th>#</th><th>Joukkue</th>${th('GP', 'Games Played', 'Ottelut')}${th('PTS', 'Points', 'Pisteet')}${th('xPTS', 'Expected Points', 'Odotetut pisteet ottelukohtaisesta xG:stä')}${th('xRank', 'Expected Rank', 'Sija odotettujen pisteiden mukaan')}${th('PTS − xPTS', 'Points minus Expected Points', 'Plussalla pisteitä on tullut enemmän kuin maalipaikat ennustavat', 'dsv-bar-h')}<th></th>${th('xGF–xGA', 'Expected Goals For – Against', 'Maaliodottama puolesta–vastaan')}</tr>
+      <tr><th>#</th><th>Joukkue</th>${th('GP', 'Games Played', 'Ottelut')}${th('PTS', 'Points', 'Pisteet')}${th('xPTS', 'Expected Points', 'Odotetut pisteet ottelukohtaisesta xG:stä')}${th('xRank', 'Expected Rank', 'Sija odotettujen pisteiden mukaan')}${th('PTS − xPTS', 'Points minus Expected Points', 'Plussalla pisteitä on tullut enemmän kuin maalipaikat ennustavat', 'dsv-bar-h')}<th></th>${th('xGF–xGA', 'Expected Goals For – Against', 'Omat–vastustajan maalipaikat')}</tr>
       ${rows.map(t => `<tr class="${t.id === SAIPA_NUM ? 'me' : ''}">
         <td>${t.rank}.</td><td class="tn">${t.logo ? `<img class="tlogo" src="${esc(t.logo)}" alt="">` : ''}${esc(t.name)}</td><td>${t.gp}</td><td><b>${t.pts}</b></td><td>${num(t.xpts, 1)}</td>
         <td><span class="${t.xrank < t.rank ? 'neg-num' : t.xrank > t.rank ? 'pos-num' : ''}">${t.xrank}.</span></td>
@@ -462,11 +462,11 @@ function stateHtml(x) {
   return `
     <div class="grid2 flat">
       <div><h3>Tilanteen mukaan</h3>
-        <div class="tablewrap"><table class="mini st-t"><tr><th></th>${th('TOI', 'Time on Ice', 'Peliaika tilanteessa')}${th('GF–GA', 'Goals For – Against', 'Maalit puolesta–vastaan')}${th('SAT', 'Shot Attempts For – Against', 'Laukausyritykset puolesta–vastaan, kaikki pelitilanteet')}${th('SAT%', 'Shot Attempt Percentage', 'SaiPan osuus laukausyrityksistä')}${th('GF/60', 'Goals For – Against per 60', 'Maalit puolesta–vastaan 60 minuuttia kohden')}</tr>
+        <div class="tablewrap"><table class="mini st-t"><tr><th></th>${th('TOI', 'Time on Ice', 'Peliaika tilanteessa')}${th('GF–GA', 'Goals For – Against', 'Tehdyt–päästetyt maalit')}${th('SAT', 'Shot Attempts For – Against', 'Omat–vastustajan laukausyritykset, kaikki pelitilanteet')}${th('SAT%', 'Shot Attempt Percentage', 'SaiPan osuus laukausyrityksistä')}${th('GF/60', 'Goals For – Against per 60', 'Tehdyt–päästetyt maalit 60 minuutissa')}</tr>
         ${states.map(s => `<tr><td><b>${s.l}</b></td><td>${Math.round(s.toi / 60)} min</td><td>${s.gf}–${s.ga}</td><td>${s.cf}–${s.ca}</td><td>${pct(s.cfp, 0)}${bar(s.cfp)}</td><td>${s.toi ? num(s.gf / s.toi * 3600, 2) : '–'}–${s.toi ? num(s.ga / s.toi * 3600, 2) : '–'}</td></tr>`).join('')}
         </table></div></div>
       <div><h3>Erittäin</h3>
-        <div class="tablewrap"><table class="mini st-t"><tr><th></th>${th('GP', 'Games Played', 'Ottelut')}${th('GF–GA', 'Goals For – Against', 'Maalit puolesta–vastaan')}${th('xGF–xGA', 'Expected Goals For – Against', 'Maaliodottama puolesta–vastaan')}${th('xGF%', 'Expected Goals For Percentage', 'SaiPan osuus maaliodottamasta')}${th('SAT', 'Shot Attempts For – Against', 'Laukausyritykset puolesta–vastaan')}</tr>
+        <div class="tablewrap"><table class="mini st-t"><tr><th></th>${th('GP', 'Games Played', 'Ottelut')}${th('GF–GA', 'Goals For – Against', 'Tehdyt–päästetyt maalit')}${th('xGF–xGA', 'Expected Goals For – Against', 'Omat–vastustajan maalipaikat')}${th('xGF%', 'Expected Goals For Percentage', 'SaiPan osuus maaliodottamasta')}${th('SAT', 'Shot Attempts For – Against', 'Omat–vastustajan laukausyritykset')}</tr>
         ${pers.map(p => `<tr><td><b>${PERIOD_LABEL(p.n)}</b></td><td>${p.gp}</td><td>${p.gf}–${p.ga}</td><td>${num(p.xgf, 1)}–${num(p.xga, 1)}</td><td>${pct(p.xgp, 0)}${bar(p.xgp)}</td><td>${p.cf}–${p.ca}</td></tr>`).join('')}
         </table></div></div>
     </div>

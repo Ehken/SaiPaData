@@ -147,7 +147,7 @@ function playerHero(bio, line, sub) {
   const age = bio.dateOfBirth ? Math.floor((Date.now() - new Date(bio.dateOfBirth)) / 3.15576e10) : null;
   const facts = [bio.roleCode && posGroup(bio.roleCode) === 'D' ? 'Puolustaja' : posGroup(bio.roleCode) === 'G' ? 'Maalivahti' : 'Hyökkääjä',
     age ? `${age} v` : '', bio.height ? `${bio.height} cm` : '', bio.weight ? `${bio.weight} kg` : '',
-    bio.handedness ? (bio.handedness === 'LEFT' ? 'Vasen' : 'Oikea') + ' kätinen' : '', bio.nationality || ''].filter(Boolean);
+    bio.handedness ? 'Mailakäsi ' + bio.handedness[0] : '', bio.nationality || ''].filter(Boolean);
   return `<div class="p-hero">
     <div class="p-ph">${bio.pictureUrl ? `<img src="${esc(bio.pictureUrl)}" alt="" onerror="this.remove()">` : ''}</div>
     <div><div class="p-no">#${bio.jersey ?? ''}${bio.captain ? ' · C' : bio.alternateCaptain ? ' · A' : ''}</div>
@@ -210,7 +210,7 @@ function skaterPage(id, rows, bio, league) {
     <div class="card" id="pShots"><h2>Laukauskartta</h2><p class="loading">Haetaan laukauksia…</p></div>
     <div class="card" id="careerCard"><h2>Ura</h2><p class="loading">Haetaan uraa…</p></div>
     <div class="card"><h2>Ottelut</h2><div class="tablewrap"><table class="mini glog">
-      <tr><th>Ottelu</th><th>Tulos</th><th data-tip="Goals\nMaalit">G</th><th data-tip="Assists\nSyötöt">A</th><th data-tip="Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="Expected Goals\nMaaliodottama">xG</th><th data-tip="Corsi Differential\nTasakentin laukausyritykset puolesta − vastaan">C+/-</th><th data-tip="Time on Ice\nPeliaika">TOI</th><th data-tip="Game Score\nPelipisteet">GS</th></tr>
+      <tr><th>Ottelu</th><th>Tulos</th><th data-tip="Goals\nMaalit">G</th><th data-tip="Assists\nSyötöt">A</th><th data-tip="Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="Expected Goals\nMaaliodottama">xG</th><th data-tip="Corsi Differential\nTasakentin omat miinus vastustajan laukausyritykset">C+/-</th><th data-tip="Time on Ice\nPeliaika">TOI</th><th data-tip="Game Score\nPelipisteet">GS</th></tr>
       ${[...rows].reverse().map(r => r.p ? `<tr><td><a href="?game=${r.game.id}&tab=report">${esc(oppLabel(r))}</a></td><td>${resLabel(r)}</td><td>${r.p.g}</td><td>${r.p.a}</td><td>${r.p.shots}</td><td>${r.p.sog ?? '–'}</td><td>${num(r.p.ixg, 2)}</td>
         <td><span class="${cls(r.p.cf - r.p.ca)}">${signed(r.p.cf - r.p.ca, 0)}</span>${r.p.corsiOk === false ? '*' : ''}</td><td>${mmss(r.p.toi)}</td><td><b>${num(r.p.gs, 2)}</b></td></tr>`
         : `<tr class="idle"><td><a href="?game=${r.game.id}&tab=report">${esc(oppLabel(r))}</a></td><td>${resLabel(r)}</td><td colspan="8" class="muted">Ei kokoonpanossa</td></tr>`).join('')}

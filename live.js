@@ -86,34 +86,56 @@ async function liveFetch(id) {
   return data;
 }
 
-// SaiPa's chance of winning from the score at a moment, with the pre-game goal rates for the time that is left.
-// A tie after 60 minutes counts as half a win (overtime or shootout).
-function liveWinProb(pre, score, elapsed, home) {
+// SaiPa's chance of winning from the score at a moment. A tie after 60 minutes counts as half a win.
+// Goals for the time left: the pre-game rates, nudged by this game's expected goals (LIVE_XG_K games of
+// prior weight; tested on 2025–26: neutral on average, but follows games where one team dominates).
+// The last minutes follow Liiga's 2025–26 pulled-goalie pattern: a team down by one pulls its goalie at
+// about 58:00 and down by two at about 57:15; then the trailing team scores 9 and the leader 17 (down by
+// one) or 24 (down by two) goals per 60 minutes. An empty net that is on right now (after 55:00; earlier ones are delayed penalties) counts from now.
+const LIVE_XG_K = 3, EN_PULL = { 1: 3480, 2: 3435 }, EN_RATE = { 1: [9, 16.6], 2: [8.5, 24] };
+function liveWinProb(pre, score, elapsed, home, xg, pulled) {
   if (!pre) return null;
   if (elapsed >= 3600) return score.h === score.a ? 0.5 : (score.h > score.a) === home ? 1 : 0;
-  const r = (3600 - elapsed) / 3600, lh = pre.lh * r, la = pre.la * r;
-  let w = 0, t = 0;
-  for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) {
-    const p = poisson(lh, i) * poisson(la, j), dh = score.h + i, da = score.a + j;
-    if (dh === da) t += p; else if ((dh > da) === home) w += p;
-  }
+  const e = elapsed / 3600;
+  const rh = xg ? (pre.lh * LIVE_XG_K + xg.h) / (LIVE_XG_K + e) : pre.lh, ra = xg ? (pre.la * LIVE_XG_K + xg.a) / (LIVE_XG_K + e) : pre.la;
+  // Goal difference (home − away) distribution, stepped forward 5 seconds at a time
+  const N = 10, step = 5; let P = new Array(2 * N + 1).fill(0); P[N + score.h - score.a] = 1;
+  for (let s = elapsed; s < 3600; s += step) {
+    const dt = Math.min(step, 3600 - s) / 3600, Q = new Array(2 * N + 1).fill(0);
+    for (let k = 0; k <= 2 * N; k++) { const p = P[k]; if (!p) continue; const d = k - N, ad = Math.abs(d);
+      let gh = rh, ga = ra;
+      if ((ad === 1 || ad === 2) && (s >= EN_PULL[ad] || (pulled && elapsed >= 3300 && pulled === (d > 0 ? 'a' : 'h')))) {
+        const [trail, lead] = EN_RATE[ad]; if (d > 0) { gh = lead; ga = trail; } else { gh = trail; ga = lead; } }
+      const ph = gh * dt, pa = ga * dt;
+      Q[k] += p * (1 - ph - pa); if (k < 2 * N) Q[k + 1] += p * ph; if (k > 0) Q[k - 1] += p * pa; }
+    P = Q; }
+  let w = 0, t = P[N]; for (let k = 0; k <= 2 * N; k++) if (k !== N && ((k > N) === home)) w += P[k];
   return w + t / 2;
 }
 
 // Win probability over the game, one point per minute, with goals and penalties marked
-function wpChart(pre, d, t, home) {
+// xgNow: this game's expected goals so far {h, a}; en: empty-net intervals per side {h, a} as [begin, end]
+function wpChart(pre, d, t, home, xgNow, en) {
   if (!pre) return '';
+  // Expected goals at a moment: each team's current total spread evenly over its shot attempts so far
+  const cnt = mine => d.shots.filter(x => x.mine === mine && x.t <= t).length;
+  const cs = cnt(true), co = cnt(false), xs = xgNow ? (home ? xgNow.h : xgNow.a) : 0, xo = xgNow ? (home ? xgNow.a : xgNow.h) : 0;
+  const xgAt = s => { if (!xgNow) return null; const a = cs ? xs * d.shots.filter(x => x.mine && x.t <= s).length / cs : xs * s / Math.max(1, t), b = co ? xo * d.shots.filter(x => !x.mine && x.t <= s).length / co : xo * s / Math.max(1, t); return home ? { h: a, a: b } : { h: b, a: a }; };
+  const pulledAt = s => en ? (['h', 'a'].find(k => (en[k] || []).some(([b0, e0]) => b0 <= s && (e0 == null || e0 > s))) || null) : null;
+  const P = (sc, s) => liveWinProb(pre, sc, s, home, xgAt(s), pulledAt(s));
   const goals = d.goals.filter(x => x.valid);
   const scoreAt = s => { let h = 0, a = 0; for (const x of goals) if (x.t <= s) { if (x.mine === home) h++; else a++; } return { h, a }; };
   const end = Math.max(3600, t), pts = [];
-  for (let s = 0; s <= t; s += 60) pts.push([s, liveWinProb(pre, scoreAt(s), s, home)]);
-  pts.push([t, liveWinProb(pre, scoreAt(t), t, home)]);
-  const W = 760, H = 170, m = { l: 34, r: 12, t: 12, b: 22 };
+  for (let s = 0; s <= t; s += 60) pts.push([s, P(scoreAt(s), s)]);
+  pts.push([t, P(scoreAt(t), t)]);
+  // Phones get a narrower, relatively taller drawing so labels and marks stay readable
+  const narrow = matchMedia('(max-width: 600px)').matches;
+  const W = narrow ? 400 : 760, H = narrow ? 190 : 170, m = { l: 40, r: 10, t: 12, b: 24 };
   const x = s => m.l + s / end * (W - m.l - m.r), y = v => m.t + (1 - v) * (H - m.t - m.b);
   const line = pts.map(([s, v]) => `${x(s)},${y(v)}`).join(' ');
   const area = `${x(0)},${y(0.5)} ${line} ${x(t)},${y(0.5)}`;
   const per = [1200, 2400, 3600].filter(s => s < end).map(s => `<line x1="${x(s)}" x2="${x(s)}" y1="${m.t}" y2="${H - m.b}" class="gc-grid"/>`).join('');
-  const gm = goals.map(g => `<circle cx="${x(g.t)}" cy="${y(liveWinProb(pre, scoreAt(g.t), g.t, home))}" r="5" class="${g.mine ? 'wp-g s' : 'wp-g'}" data-tip="${esc(`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? 'SaiPa' : d.O.teamName} · ${inPeriod(g.t)}\nTekijä\t${g.scorer}\nSyöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}\nSaiPan voittotodennäköisyys\t${pct(liveWinProb(pre, scoreAt(g.t), g.t, home), 0)}`)}"/>`).join('');
+  const gm = goals.map(g => `<circle cx="${x(g.t)}" cy="${y(P(scoreAt(g.t), g.t))}" r="5" class="${g.mine ? 'wp-g s' : 'wp-g'}" data-tip="${esc(`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? 'SaiPa' : d.O.teamName} · ${inPeriod(g.t)}\nTekijä\t${g.scorer}\nSyöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}\nSaiPan voittotodennäköisyys\t${pct(P(scoreAt(g.t), g.t), 0)}`)}"/>`).join('');
   const pen = d.penalties.filter(p => p.t <= t && p.min < 10).map(p => `<g data-tip="${esc(`Jäähy · ${p.mine ? 'SaiPa' : d.O.teamName}\n${p.player}${p.name ? `\t${p.name}` : ''}\n${p.min} min\t${inPeriod(p.t)}–${inPeriod(Math.min(p.end, Math.max(t, p.t)))}`)}"><rect x="${x(p.t)}" y="${H - m.b - 10}" width="${Math.max(6, x(Math.min(p.end, t)) - x(p.t))}" height="12" fill="transparent"/><rect x="${x(p.t)}" y="${H - m.b - 4}" width="${Math.max(2, x(Math.min(p.end, t)) - x(p.t))}" height="4" class="${p.mine ? 'wp-p s' : 'wp-p'}"/></g>`).join('');
   const cols = pts.filter((_, i) => i % 2 === 0 || i === pts.length - 1);
   const tips = cols.map(([s, v]) => { const sc = scoreAt(s); return `${s >= 3600 ? 'JA' : `${Math.floor(s / 1200) + 1}. erä`} ${mmss(s % 1200)}\nTilanne\t${sc.h}–${sc.a}\nSaiPan voitto\t${pct(v, 0)}`; });
@@ -379,7 +401,10 @@ async function renderLive(id, box) {
     const S = home ? G.homeTeam : G.awayTeam, O = home ? G.awayTeam : G.homeTeam;
     const sf = home ? score.h : score.a, sa = home ? score.a : score.h;
     const xgf = S.expectedGoals, xga = O.expectedGoals;
-    const wp = G.ended ? null : liveWinProb(pre, score, t, home), wp0 = liveWinProb(pre, { h: 0, a: 0 }, 0, home);
+    const xgNow = { h: G.homeTeam.expectedGoals || 0, a: G.awayTeam.expectedGoals || 0 };
+    const en = { h: (G.homeTeam.goalKeeperEvents || []).filter(e => e.emptyNet).map(e => [e.beginTime, e.endTime]), a: (G.awayTeam.goalKeeperEvents || []).filter(e => e.emptyNet).map(e => [e.beginTime, e.endTime]) };
+    const pulledNow = ['h', 'a'].find(k => en[k].some(([b0, e0]) => b0 <= t && (e0 == null || e0 > t))) || null;
+    const wp = G.ended ? null : liveWinProb(pre, score, t, home, xgNow, pulledNow), wp0 = liveWinProb(pre, { h: 0, a: 0 }, 0, home);
     const recent = d.shots.filter(x => x.t > t - 300 && x.t <= t), rm = recent.filter(x => x.mine).length, ro = recent.length - rm;
     // Liiga rule: penalties of equal length called at the same moment on both teams cancel out (no 4 v 4),
     // so they are left out of the manpower count. Misconducts (10 min) never change manpower.
@@ -419,7 +444,7 @@ async function renderLive(id, box) {
     // The five permanent tiles: always present (a dash when data is missing), so the grid never changes shape
     const tiles = [
       wp != null ? tile('📊', 'Voitto\u00adtodennäköisyys', pct(wp, 0), '', null, `ennen ottelua ${pct(wp0, 0)}`, wp >= wp0 ? 'pos' : 'neg',
-        'SaiPan voittotodennäköisyys nyt\nNykyinen tilanne + ennusteen maalitahti jäljellä olevalle ajalle\nTasapeli 60 minuutin jälkeen lasketaan puolikkaaksi')
+        'SaiPan voittotodennäköisyys nyt\nTilanne, ennakkoarvio, tämän ottelun maalipaikat ja lopun tyhjä maali\nTasapeli 60 minuutin jälkeen = puolikas voitto')
         : tile('📊', 'Voitto\u00adtodennäköisyys', G.ended ? (sf > sa ? 'Voitto' : sf < sa ? 'Tappio' : '–') : '–', '', null, G.ended ? 'ottelu päättyi' : 'ei ennustetta'),
       tile('🎯', 'Maalipaikat', xgf != null ? `${num(home ? xgf : xga, 1)}–${num(home ? xga : xgf, 1)}` : '–', xgf != null ? 'xG' : '', null, xgf != null ? `${pre ? `ennuste ${num(pre.lh, 1)}–${num(pre.la, 1)} · ` : ''}SaiPa ${signed(sf - xgf, 1)} G−xG` : 'ei dataa', '',
         `Expected Goals\nMaaliodottama: kuinka monta maalia laukaisupaikoista tulisi keskimäärin, ${hn}–${an}\nG−xG: SaiPan maalit miinus maaliodottama. Plus = maaleja enemmän kuin paikat antaisivat odottaa.`),
@@ -452,7 +477,7 @@ async function renderLive(id, box) {
       <div class="lv-head">${G.ended ? '' : '<span class="lv-dot"></span>'}<b>${esc(G.homeTeam.teamName)} ${score.h}–${score.a} ${esc(G.awayTeam.teamName)}</b><span>${clock}</span><span class="lv-stamp" data-tip="${esc(stampTip)}">päivitetty ${new Date().toLocaleTimeString('fi-FI')}</span>${nowStrip}</div>
       <div class="tiles lv-tiles">${tiles.join('')}</div>
       ${periodBreakHtml(g, st, ctx, t, home, intermission, d)}
-      ${wpChart(pre, d, t, home)}
+      ${wpChart(pre, d, t, home, xgNow, en)}
       ${pvt ? pvtHtml(pvt, teams) : ''}
       ${iceHtml(full, d, g, per)}
       ${G.ended ? '<p class="muted small">Ottelu on päättynyt. Lataa sivu uudelleen, niin raportti avautuu Ottelu-välilehdelle.</p>' : ''}

@@ -566,11 +566,11 @@ function skaterSets(rows, opt = {}) {
       ...[1, 2, 3, 4].filter(n => rows.some(p => p.toiP?.[n])).map(n => C(`toi${n}`, ['1st', '2nd', '3rd', 'OT'][n - 1], `Time on Ice, ${['1st Period', '2nd Period', '3rd Period', 'Overtime'][n - 1]}`, `Peliaika, ${n < 4 ? n + '. erä' : 'jatkoaika'}`, p => p.toiP?.[n] ? mmss(p.toiP[n]) : '', p => p.toiP?.[n] || 0, 'TOI')),
     ]],
     edistyneet: ['Edistyneet', 'corsi', [
-      C('corsi', 'C+/-', 'Corsi Differential', 'Tasakentin laukausyritykset puolesta − vastaan pelaajan ollessa jäällä', p => `<span class="${cls(p.cf - p.ca)}">${signed(p.cf - p.ca, Number.isInteger(p.cf - p.ca) ? 0 : 2)}</span>${p.corsiOk === false ? '*' : ''}`, p => p.cf - p.ca, 'Corsi'),
-      C('cf', 'CF–CA', 'Corsi For – Corsi Against', 'Tasakentin laukausyritykset puolesta–vastaan pelaajan ollessa jäällä', p => `${v(p.cf)}–${v(p.ca)}`, p => p.cf, 'Corsi'),
+      C('corsi', 'C+/-', 'Corsi Differential', 'Tasakentin omat miinus vastustajan laukausyritykset pelaajan ollessa jäällä', p => `<span class="${cls(p.cf - p.ca)}">${signed(p.cf - p.ca, Number.isInteger(p.cf - p.ca) ? 0 : 2)}</span>${p.corsiOk === false ? '*' : ''}`, p => p.cf - p.ca, 'Corsi'),
+      C('cf', 'CF–CA', 'Corsi For – Corsi Against', 'Tasakentin omat–vastustajan laukausyritykset pelaajan ollessa jäällä', p => `${v(p.cf)}–${v(p.ca)}`, p => p.cf, 'Corsi'),
       C('cfp', 'CF%', 'Corsi For Percentage', 'Oman joukkueen osuus tasakentin laukausyrityksistä pelaajan ollessa jäällä', p => ratio(p.cf, p.cf + p.ca), p => (p.cf + p.ca) ? p.cf / (p.cf + p.ca) : -1, 'Corsi'),
       C('corRel', 'CF% Rel', 'Relative Corsi For Percentage', 'Pelaajan CF% miinus joukkueen CF% hänen ollessaan vaihdossa, prosenttiyksikköinä. Plussalla joukkue on parempi pelaajan ollessa jäällä.', p => relCell(corRel(p)), p => corRel(p) ?? -9, 'Corsi'),
-      C('xgf', 'xGF–xGA', 'Expected Goals For – Against', 'Maaliodottama puolesta–vastaan pelaajan ollessa jäällä, kaikki tilanteet', p => `${num(p.xgf, 2)}–${num(p.xga, 2)}`, p => p.xgf - p.xga, 'Maaliodottama kentällä'),
+      C('xgf', 'xGF–xGA', 'Expected Goals For – Against', 'Omat–vastustajan maalipaikat pelaajan ollessa jäällä, kaikki tilanteet', p => `${num(p.xgf, 2)}–${num(p.xga, 2)}`, p => p.xgf - p.xga, 'Maaliodottama kentällä'),
       C('xgp', 'xGF%', 'Expected Goals For Percentage', 'Oman joukkueen osuus maaliodottamasta pelaajan ollessa jäällä', p => ratio(p.xgf, p.xgf + p.xga), p => (p.xgf + p.xga) ? p.xgf / (p.xgf + p.xga) : -1, 'Maaliodottama kentällä'),
       C('xgRel', 'xGF% Rel', 'Relative Expected Goals For Percentage', 'Pelaajan xGF% miinus joukkueen xGF% hänen ollessaan vaihdossa, prosenttiyksikköinä. Vain koko ottelusta.', p => relCell(xgRel(p)), p => xgRel(p) ?? -9, 'Maaliodottama kentällä'),
       C('zsO', 'OZS', 'Offensive Zone Starts', 'Joukkueen hyökkäyspään aloitukset tasakentin pelaajan ollessa jäällä', p => v(p.zsO), p => p.zsO, 'Aloituspaikat'),
@@ -858,7 +858,8 @@ async function renderSeason() {
         ${quadrant(q)}
         <p class="muted small">Vähintään ${Math.round(MIN_TOI_SEASON / 60)} min peliaikaa · peliaika hoverissa</p>
       </div>
-      <div class="card" id="lineCard"><h2>Ketjut ja parit</h2><p class="loading">Lasketaan…</p></div>`)}
+      <div class="card" id="lineCard"><h2>Ketjut ja parit</h2><p class="loading">Lasketaan…</p></div>
+      <div class="card" id="leCard"><h2>Kokoonpanoeditori</h2><p class="loading">Ladataan…</p></div>`)}
       ${sec('mv', `
       <div class="card" id="gkCard">
         <h2>Maalivahdit</h2>
@@ -871,6 +872,7 @@ async function renderSeason() {
       <div class="card" id="stateCard"><h2>Pelitilanteittain</h2><p class="loading">Lasketaan…</p></div>
       <div class="card" id="dsvCard"><h2>Sarjataulukko maalipaikkojen mukaan</h2><p class="loading">Lasketaan odotettuja pisteitä…</p></div>`)}
       ${sec('liiga', `
+      <div class="card" id="fcTableCard"><h2>Sarjaennuste</h2><p class="loading">Simuloidaan loppukautta…</p></div>
       <div class="card" id="topCard"><h2>Liigan nopeimmat ja kovimmat</h2><p class="loading">Haetaan liigan tilastoja…</p></div>`)}`;
 
     // Section tabs
@@ -884,6 +886,7 @@ async function renderSeason() {
     seasonExtras(gks);
     seasonInsights(games);
     drawSeasonSkaters(sk, team);
+    { const el = $('#leCard'); if (el) { if (typeof renderLineupEditor === 'function') renderLineupEditor(el, sk).catch(e => { el.innerHTML = `<h2>Kokoonpanoeditori</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }); else el.remove(); } }
     drawSeasonGoalies(gks, null);
   } catch (e) {
     seasonDone = false;
@@ -898,6 +901,7 @@ async function seasonExtras(gks) {
   const sched = await getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`).catch(() => []);
   const stn = await getJSON(`/standings/?season=${SEASON}`).catch(() => ({}));
   const info = new Map((stn.season || []).map(t => [t.internalId, { name: t.teamName, logo: t.teamLogos?.lightBg || null, ranking: t.ranking }]));
+  { const el = $('#fcTableCard'); if (el && typeof renderSeasonForecast === 'function') renderSeasonForecast(el, stn).catch(e => { el.innerHTML = `<h2>Sarjaennuste</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }); }
   try { put('#dsvCard', 'Sarjataulukko maalipaikkojen mukaan', deservedHtmlSeason(deservedTable(sched, info))); } catch (e) { fail('#dsvCard', 'Sarjataulukko maalipaikkojen mukaan')(e); }
   Promise.all(saipaGames.map(g => loadRaw(g.id)))
     .then(raws => put('#stateCard', 'Pelitilanteittain', stateHtml(stateSplits(raws))))
@@ -1190,6 +1194,7 @@ function viewUrl(view, sub) {
   if (view === 'ottelu') return LAST_HUB || (urlState().game ? location.search : location.pathname);
   const u = new URLSearchParams({ view: URL_VIEW[view] || view });
   if (sub) u.set('tab', URL_TAB[sub] || sub);
+  if (view === 'historia' && typeof HIST_DATE !== 'undefined' && HIST_DATE) u.set('date', HIST_DATE);
   return '?' + u.toString();
 }
 function setUrl(url, push) {
