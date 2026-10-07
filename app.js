@@ -61,9 +61,28 @@ async function getJSON(path) {
     cache.set(path, fetch(API + path).then(r => {
       if (!r.ok) throw new Error(`${r.status} ${path}`);
       return r.json();
-    }));
+    }).then(j => path.includes('/shotmap/') ? cleanShotmap(j) : j));
   }
   return cache.get(path);
+}
+// The league's shot map sometimes lists shots twice (seen in KalPa–SaiPa 2.10.2026: 186 rows for 94 shots).
+// The extra copy always has xg = null. A row is dropped only when it has no xg AND
+//  - another row with xg has the same period, second, team, shooter, coordinates and event type, or
+//  - it is a goal and the same team already has a goal with xg at that same second (copy with a wrong shooter).
+// Real shots never match these (one shooter cannot shoot twice from the same spot in the same second), and
+// in 2025–26 and the rest of 2026–27 no row is removed. The copy's blockerId fills in a missing one.
+function cleanShotmap(sm) {
+  if (!Array.isArray(sm)) return sm;
+  const key = s => [s.period, s.gameTime, s.shootingTeamId, s.shooterId, s.shotX, s.shotY, s.eventType, s.type].join('|');
+  const goalKey = s => [s.period, s.gameTime, s.shootingTeamId].join('|');
+  const byKey = new Map(), goals = new Set();
+  for (const s of sm) if (s.xg != null) { byKey.set(key(s), s); if (s.eventType === 'GOAL') goals.add(goalKey(s)); }
+  return sm.filter(s => {
+    if (s.xg != null) return true;
+    const twin = byKey.get(key(s));
+    if (twin) { if (!twin.blockerId && s.blockerId) twin.blockerId = s.blockerId; return false; }
+    return !(s.eventType === 'GOAL' && goals.has(goalKey(s)));
+  });
 }
 
 /* ---------- hover tooltips ----------
