@@ -82,6 +82,7 @@ async function liveFetch(id) {
   const paths = [`/games/${SEASON}/${id}`, `/games/stats/${SEASON}/${id}`, `/shotmap/${SEASON}/${id}`];
   const data = await Promise.all(paths.map(p => fetch(API + p, { cache: 'no-store' })
     .then(r => r.ok ? r.json() : (p.includes('shotmap') ? [] : Promise.reject(new Error(`${r.status}`)))).then(j => p.includes('shotmap') ? cleanShotmap(j) : j)));
+  data[2] = shotmapScorers(data[2], data[0]);
   paths.forEach((p, i) => cache.set(p, Promise.resolve(data[i])));
   return data;
 }

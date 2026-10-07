@@ -52,12 +52,14 @@ const slotBox = () => `<rect class="rk-slot" x="${RINK.goalX - 10 * RINK.perM}" 
 
 function marker(s, cls) {
   const t = `${s.goal ? 'Maali' : s.eventType === 'GOALIE_BLOCKED' ? 'Torjuttu' : s.eventType === 'PLAYER_BLOCKED' ? 'Blokattu' : 'Ohi'} · ${s.situ}${s.label ? ' · ' + s.label : ''}`;
-  if (s.goal) return `<g class="mk ${cls}"><title>${esc(t)}</title><circle cx="${s.x}" cy="${s.y}" r="15" class="mk-goal"/><circle cx="${s.x}" cy="${s.y}" r="5" class="mk-goal-c"/></g>`;
+  // A goal whose scorer was corrected from the official goal events gets a dashed ring and a note
+  const fix = s.goal && s.mapShooterId ? `\nTekijä korjattu virallisten maalitietojen mukaan. Liigan laukauskartassa: ${s.mapShooter || 'toinen pelaaja'}` : '';
+  if (s.goal) return `<g class="mk ${cls}${fix ? ' mk-fixed' : ''}"><title>${esc(t + fix)}</title>${fix ? `<circle cx="${s.x}" cy="${s.y}" r="22" class="mk-fix"/>` : ''}<circle cx="${s.x}" cy="${s.y}" r="15" class="mk-goal"/><circle cx="${s.x}" cy="${s.y}" r="5" class="mk-goal-c"/></g>`;
   if (s.eventType === 'GOALIE_BLOCKED') return `<circle class="mk ${cls} mk-sog" cx="${s.x}" cy="${s.y}" r="8"><title>${esc(t)}</title></circle>`;
   if (s.eventType === 'PLAYER_BLOCKED') return `<path class="mk ${cls} mk-blk" d="M ${s.x - 6} ${s.y - 6} L ${s.x + 6} ${s.y + 6} M ${s.x + 6} ${s.y - 6} L ${s.x - 6} ${s.y + 6}"><title>${esc(t)}</title></path>`;
   return `<circle class="mk ${cls} mk-miss" cx="${s.x}" cy="${s.y}" r="7"><title>${esc(t)}</title></circle>`;
 }
-const mapLegend = () => `<div class="sm-legend"><span><i class="lg-goal"></i>Maali</span><span><i class="lg-sog"></i>Torjuttu</span><span><i class="lg-miss"></i>Ohi</span><span><i class="lg-blk">×</i>Blokattu</span></div>`;
+const mapLegend = (fixed = false) => `<div class="sm-legend"><span><i class="lg-goal"></i>Maali</span><span><i class="lg-sog"></i>Torjuttu</span><span><i class="lg-miss"></i>Ohi</span><span><i class="lg-blk">×</i>Blokattu</span>${fixed ? '<span data-tip="Liigan laukauskartassa maalin tekijänä on eri pelaaja kuin virallisissa maalitiedoissa. Sivu käyttää virallista tekijää."><i class="lg-fix"></i>Tekijä korjattu</span>' : ''}</div>`;
 
 /* ---------- SM-1: game shot map ---------- */
 // SaiPa attacks the right net and the opponent the left net, for the whole game.
@@ -73,7 +75,7 @@ function shotMapCard(sm, g, oppName) {
     </div>
     <div class="sm-dir"><span><i class="dot opp"></i>← ${esc(oppName)} hyökkää</span><span>SaiPa hyökkää →<i class="dot sai"></i></span></div>
     <svg viewBox="0 0 1000 510" class="rink" id="shotSvg"></svg>
-    ${mapLegend()}
+    ${mapLegend(sm.some(x => x.eventType === 'GOAL' && x.mapShooterId))}
     <div class="sm-sum" id="shotSum"></div>
   </div>`;
 }

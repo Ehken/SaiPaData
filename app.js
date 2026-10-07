@@ -61,7 +61,7 @@ async function getJSON(path) {
     cache.set(path, fetch(API + path).then(r => {
       if (!r.ok) throw new Error(`${r.status} ${path}`);
       return r.json();
-    }).then(j => path.includes('/shotmap/') ? cleanShotmap(j) : j));
+    }).then(j => path.includes('/shotmap/') ? fixShotmap(path, j) : j));
   }
   return cache.get(path);
 }
@@ -71,6 +71,32 @@ async function getJSON(path) {
 //  - it is a goal and the same team already has a goal with xg at that same second (copy with a wrong shooter).
 // Real shots never match these (one shooter cannot shoot twice from the same spot in the same second), and
 // in 2025–26 and the rest of 2026–27 no row is removed. The copy's blockerId fills in a missing one.
+// Shot map rows for a game, cleaned and with goal scorers matched to the official goal events
+async function fixShotmap(path, sm) {
+  const clean = cleanShotmap(sm);
+  const [, season, id] = path.match(/\/shotmap\/(\d+)\/(\d+)/) || [];
+  const g = id ? await getJSON(`/games/${season}/${id}`).catch(() => null) : null;
+  return g ? shotmapScorers(clean, g) : clean;
+}
+// The shot map keeps the original shooter when the league later changes the scorer (e.g. a tip, seen in
+// SaiPa–Ässät 23.9.2026: map Fridrich, official Tauslahti). Each goal row takes the scorer of the official goal
+// by the same team within 5 seconds; each official goal is used once. The shot's location is kept as it is.
+function shotmapScorers(sm, g) {
+  if (!Array.isArray(sm) || !g?.game) return sm;
+  const ev = [g.game.homeTeam, g.game.awayTeam].flatMap(t => (t.goalEvents || [])
+    .filter(e => !e.cancelled && e.scorerPlayerId)
+    .map(e => ({ team: Number(String(t.teamId).split(':')[0]), t: e.gameTime, id: e.scorerPlayerId, used: false })));
+  // Names for the correction note: the shooter the league's map had
+  const nameOf = new Map([...(g.homeTeamPlayers || []), ...(g.awayTeamPlayers || [])].map(p => [p.id, `${p.firstName} ${p.lastName}`]));
+  for (const s of sm.filter(x => x.eventType === 'GOAL')) {
+    const e = ev.filter(x => !x.used && x.team === s.shootingTeamId && Math.abs(x.t - s.gameTime) <= 5)
+      .sort((a, b) => Math.abs(a.t - s.gameTime) - Math.abs(b.t - s.gameTime))[0];
+    if (!e) continue;
+    e.used = true;
+    if (s.shooterId !== e.id) { s.mapShooterId = s.shooterId; s.mapShooter = nameOf.get(s.shooterId) || null; s.shooterId = e.id; }
+  }
+  return sm;
+}
 function cleanShotmap(sm) {
   if (!Array.isArray(sm)) return sm;
   const key = s => [s.period, s.gameTime, s.shootingTeamId, s.shooterId, s.shotX, s.shotY, s.eventType, s.type].join('|');

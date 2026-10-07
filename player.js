@@ -222,6 +222,11 @@ function skaterShots(id, rows, league, box) {
   const el = () => box.querySelector('#pShots');
   const mine = rows.flatMap(r => (r.raw.ctx.sm || []).filter(s => s.shooterId === id)).map(normShot);
   const missing = rows.filter(r => r.p && !(r.raw.ctx.sm || []).length).length;
+  // Goals the league's map gave to this player but the official goal events give to someone else
+  const fixedIn = rows.flatMap(r => {
+    const all = [...(r.raw.g.homeTeamPlayers || []), ...(r.raw.g.awayTeamPlayers || [])];
+    return (r.raw.ctx.sm || []).filter(s => s.mapShooterId === id).map(s => { const p = all.find(x => x.id === s.shooterId); return { name: p ? p.lastName : '?' }; });
+  });
   loadLeagueShots().then(L => {
     const group = new Map(league.sk.map(x => [x.id, x.group]));
     const me = league.sk.find(x => x.id === id);
@@ -238,14 +243,14 @@ function skaterShots(id, rows, league, box) {
     const z = k => mine.filter(s => s.zone === k);
     const html = mine.length ? `
       <div class="pf-grid">
-        <div>${zoneHeat(mine, 'sai')}${mapLegend()}</div>
+        <div>${zoneHeat(mine, 'sai')}${mapLegend(mine.some(s => s.goal && s.mapShooterId))}</div>
         <div>
           ${p != null ? `<p class="lead"><b>${pct(myShare, 0)}</b> yrityksistä tulee maalin edestä. Liigan ${GROUP_ELA[g]} (vähintään 15 yritystä) se on <b>${p}. persentiili</b>.</p>` : ''}
           <table class="mini"><tr><th>Alue</th><th data-tip="Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="Goals\nMaalit">G</th><th data-tip="Shooting Percentage\nMaalit / laukaukset maalia kohti">SH%</th></tr>
           ${ZONES.map(k => { const a = z(k.k); if (!a.length) return ''; const sog = a.filter(s => s.sog).length, gl = a.filter(s => s.goal).length;
             return `<tr><td title="${esc(k.d)}">${k.l}</td><td>${a.length}</td><td>${sog}</td><td><b>${gl}</b></td><td>${pct(sog ? gl / sog : null, 0)}</td></tr>`; }).join('')}
           <tr><td><b>Yhteensä</b></td><td>${mine.length}</td><td>${mine.filter(s => s.sog).length}</td><td><b>${mine.filter(s => s.goal).length}</b></td><td></td></tr></table>
-          <p class="muted small">Mukana SaiPan ottelut, joista Liigalla on laukauskartta.${missing ? ` Kartta puuttuu ${missing} pelaajan ottelusta.` : ''} SH% = maalit / laukaukset maalia kohti.</p>
+          <p class="muted small">Mukana SaiPan ottelut, joista Liigalla on laukauskartta.${missing ? ` Kartta puuttuu ${missing} pelaajan ottelusta.` : ''}${fixedIn.length ? ` Liigan kartassa ${fixedIn.length === 1 ? 'yksi maali on' : `${fixedIn.length} maalia on`} merkitty tälle pelaajalle, mutta virallisesti ${fixedIn.length === 1 ? 'sen teki' : 'ne tekivät'} ${[...new Set(fixedIn.map(x => x.name))].join(', ')}.` : ''} SH% = maalit / laukaukset maalia kohti.</p>
         </div>
       </div>` : '<p class="muted">Ei laukausyrityksiä laukauskartoissa.</p>';
     if (el()) el().innerHTML = `<h2>Laukauskartta</h2>${html}`;

@@ -1079,3 +1079,6 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .sf-how ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75ch; line-height: 1.45; }
 /* A tip with only a heading (e.g. a Finnish column explanation) has no rows below: no divider line */
 .tip b:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+/* Shot maps: goal whose scorer was corrected from the official goal events */
+.mk-fix { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 4 3; }
+.sm-legend .lg-fix { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px dashed var(--ink); vertical-align: -2px; margin-right: 4px; }
