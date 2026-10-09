@@ -729,9 +729,10 @@ function drawPeriodContent(el, a, period, full) {
       svG('svPp', 'PP SV%', 'Power Play Save Percentage', 'Torjuntaprosentti ylivoimalla (vastustajan alivoimalaukaukset)', x => x.situ === 'AV'),
     ]],
     alue: ['Alueittain', 'svSlot', [
-      svG('svSlot', 'HD SV%', 'High-Danger Save Percentage', 'Torjuntaprosentti maalin edustalta: enintään 10 m maaliviivasta ja 5 m sivuun', x => x.zone === 'slot'),
-      svG('svWing', 'Wing SV%', 'Save Percentage from the Wings', 'Torjuntaprosentti laidoilta', x => x.zone === 'wing'),
-      svG('svPoint', 'Point SV%', 'Save Percentage from the Point', 'Torjuntaprosentti siniviivalta ja kaukaa', x => x.zone === 'point'),
+      svG('svSlot', 'HD SV%', 'High-Danger Save Percentage', 'Torjuntaprosentti maalin edustalta (NHL:n High-Danger: enintään 8,8 m maalin keskeltä)', x => x.zone === 'slot'),
+      svG('svWing', 'Wing SV%', 'Save Percentage from the Wings', 'Torjuntaprosentti laidoilta (sivulinjojen ulkopuolelta)', x => x.zone === 'wing'),
+      svG('svMid', 'MR SV%', 'Mid-Range Save Percentage', 'Torjuntaprosentti keskietäisyydeltä (8,8–13,1 m maalin keskeltä)', x => x.zone === 'mid'),
+      svG('svLong', 'LR SV%', 'Long-Range Save Percentage', 'Torjuntaprosentti kaukaa (yli 13,1 m maalin keskeltä)', x => x.zone === 'long'),
       svG('svBehind', 'Behind SV%', 'Save Percentage from Behind the Net', 'Torjuntaprosentti maaliviivan takaa', x => x.zone === 'behind'),
     ]],
   };
@@ -1048,9 +1049,10 @@ function drawSeasonGoalies(gks, L) {
         svG('svPp', 'PP SV%', 'Power Play Save Percentage', 'Torjuntaprosentti ylivoimalla', x => x.situ === 'AV'),
       ]],
       alue: ['Alueittain', 'svSlot', [
-        svG('svSlot', 'HD SV%', 'High-Danger Save Percentage', 'Torjuntaprosentti maalin edustalta', x => x.zone === 'slot'),
-        svG('svWing', 'Wing SV%', 'Save Percentage from the Wings', 'Torjuntaprosentti laidoilta', x => x.zone === 'wing'),
-        svG('svPoint', 'Point SV%', 'Save Percentage from the Point', 'Torjuntaprosentti siniviivalta ja kaukaa', x => x.zone === 'point'),
+        svG('svSlot', 'HD SV%', 'High-Danger Save Percentage', 'Torjuntaprosentti maalin edustalta (NHL:n High-Danger: enintään 8,8 m maalin keskeltä)', x => x.zone === 'slot'),
+        svG('svWing', 'Wing SV%', 'Save Percentage from the Wings', 'Torjuntaprosentti laidoilta (sivulinjojen ulkopuolelta)', x => x.zone === 'wing'),
+        svG('svMid', 'MR SV%', 'Mid-Range Save Percentage', 'Torjuntaprosentti keskietäisyydeltä (8,8–13,1 m maalin keskeltä)', x => x.zone === 'mid'),
+        svG('svLong', 'LR SV%', 'Long-Range Save Percentage', 'Torjuntaprosentti kaukaa (yli 13,1 m maalin keskeltä)', x => x.zone === 'long'),
         svG('svBehind', 'Behind SV%', 'Save Percentage from Behind the Net', 'Torjuntaprosentti maaliviivan takaa', x => x.zone === 'behind'),
       ]],
     } : {}),

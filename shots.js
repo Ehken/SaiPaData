@@ -6,10 +6,17 @@
  * The left team attacks the right net and the teams switch ends between periods.
  * normShot() rotates every shot so that the shooting team attacks the right net (x = 933, y = 255). */
 const RINK = { w: 1000, h: 510, goalX: 933, cy: 255, blue: 650, perM: 16.7 };
+// Zones follow the NHL EDGE definitions in SI units: distance from the centre of the goal, bounded on both
+// sides by lines from the faceoff dot to 0.6 m outside the goal post. Outside those lines = wings.
+const ZG = (() => {
+  const m = RINK.perM, y0 = 15 + 0.6 * m;            // post at 15 units from the centre (net 30 units wide)
+  return { r1: 8.8 * m, r2: 13.1 * m, y0, k: (119 - y0) / 100 };   // faceoff dot 100 units out, 119 to the side
+})();
 const ZONES = [
-  { k: 'slot', l: 'Maalin edusta', from: 'maalin edestä', d: 'Maalin edusta: enintään 10 m maaliviivasta ja 5 m sivuun maalin keskeltä' },
-  { k: 'wing', l: 'Laidat', from: 'laidoilta', d: 'Hyökkäysalue maalin edustan sivuilla' },
-  { k: 'point', l: 'Siniviiva ja kaukaa', from: 'siniviivalta tai kaukaa', d: 'Yli 14 m maaliviivasta' },
+  { k: 'slot', l: 'Maalin edusta', from: 'maalin edestä', d: 'Maalin edusta (NHL:n High-Danger): enintään 8,8 m maalin keskeltä, sivuilla aloituspisteestä 0,6 m maalitolpan ulkopuolelle kulkevat linjat' },
+  { k: 'mid', l: 'Keskietäisyys', from: 'keskietäisyydeltä', d: 'Keskietäisyys (NHL:n Mid-Range): 8,8–13,1 m maalin keskeltä samojen linjojen sisällä' },
+  { k: 'long', l: 'Kaukaa', from: 'kaukaa', d: 'Kaukaa (NHL:n Long-Range): yli 13,1 m maalin keskeltä hyökkäysalueella samojen linjojen sisällä' },
+  { k: 'wing', l: 'Laidat', from: 'laidoilta', d: 'Laidat: linjojen ulkopuolelta maaliviivan edestä' },
   { k: 'behind', l: 'Maalin takaa', from: 'maalin takaa', d: 'Maaliviivan takaa' },
 ];
 const SITU = { EvenStrengthShot: 'TV', PowerplayShot: 'YV', ShorthandedShot: 'AV' };
@@ -22,9 +29,29 @@ function normShot(s) {
 function zoneOf(x, y) {
   const dx = RINK.goalX - x, dy = Math.abs(y - RINK.cy);
   if (dx < 0) return 'behind';
-  if (dx <= 10 * RINK.perM && dy <= 5 * RINK.perM) return 'slot';
-  if (dx > 14 * RINK.perM) return 'point';
-  return 'wing';
+  if (dy > ZG.y0 + ZG.k * dx) return 'wing';
+  const d = Math.hypot(dx, dy);
+  return d <= ZG.r1 ? 'slot' : d <= ZG.r2 ? 'mid' : 'long';
+}
+// Zone outlines for the right net. P(r, ±1) = where a side line meets the circle of radius r around the goal.
+function zgPoint(r, side) {
+  const { y0, k } = ZG, a = 1 + k * k, b = 2 * y0 * k, c = y0 * y0 - r * r;
+  const dx = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+  return [RINK.goalX - dx, RINK.cy + side * (y0 + k * dx)];
+}
+function zonePaths() {
+  const gx = RINK.goalX, cy = RINK.cy, { r1, r2, y0, k } = ZG, f = ([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`;
+  const a1 = zgPoint(r1, -1), b1 = zgPoint(r1, 1), a2 = zgPoint(r2, -1), b2 = zgPoint(r2, 1);
+  const edge = (cy - 2 - y0) / k;                    // side line meets the boards this far out
+  const tE = [gx - edge, 2], bE = [gx - edge, 508];
+  return {
+    slot: `M ${gx} ${cy - y0} L ${f(a1)} A ${r1} ${r1} 0 0 0 ${f(b1)} L ${gx} ${cy + y0} Z`,
+    mid: `M ${f(a1)} L ${f(a2)} A ${r2} ${r2} 0 0 0 ${f(b2)} L ${f(b1)} A ${r1} ${r1} 0 0 1 ${f(a1)} Z`,
+    long: `M ${f(a2)} L ${f(tE)} L ${RINK.blue} 2 L ${RINK.blue} 508 L ${f(bE)} L ${f(b2)} A ${r2} ${r2} 0 0 1 ${f(a2)} Z`,
+    wingL: `M ${gx} ${cy - y0} L ${f(tE)} L ${gx} 2 Z`,
+    wingR: `M ${gx} ${cy + y0} L ${f(bE)} L ${gx} 508 Z`,
+    behind: `M ${gx} 2 H 998 V 508 H ${gx} Z`,
+  };
 }
 // Shooter's side: facing the right net, y < 255 is the shooter's left.
 const sideOf = s => s.y < RINK.cy ? 'vasen' : 'oikea';
@@ -47,8 +74,8 @@ function rinkLines(half) {
     ${half ? '' : c(500, 255, 76) + end(67, -1)}
     ${end(RINK.goalX, 1)}`;
 }
-// Slot outline for the right net
-const slotBox = () => `<rect class="rk-slot" x="${RINK.goalX - 10 * RINK.perM}" y="${RINK.cy - 5 * RINK.perM}" width="${10 * RINK.perM}" height="${10 * RINK.perM}"/>`;
+// Slot (NHL High-Danger) outline for the right net
+const slotBox = () => `<path class="rk-slot" d="${zonePaths().slot}"><title>${ZONES[0].d}</title></path>`;
 
 function marker(s, cls) {
   const t = `${s.goal ? 'Maali' : s.eventType === 'GOALIE_BLOCKED' ? 'Torjuttu' : s.eventType === 'PLAYER_BLOCKED' ? 'Blokattu' : 'Ohi'} · ${s.situ}${s.label ? ' · ' + s.label : ''}`;
@@ -213,15 +240,13 @@ function profileHeadlines(P, sai, opp, oppName) {
 // with the net on the right: the attacker's goals scored next to the defender's goals conceded, so the same zone
 // sits at the same spot in both pictures. Home team's pictures are always on the left.
 const SECTORS = [
-  { k: 'slot', l: 'Maalin edusta' }, { k: 'wingL', l: 'Vasen laita' }, { k: 'wingR', l: 'Oikea laita' },
-  { k: 'point', l: 'Siniviiva' }, { k: 'behind', l: 'Maalin takaa' },
+  { k: 'slot', l: 'Maalin edusta', from: 'maalin edestä' }, { k: 'mid', l: 'Keskietäisyys', from: 'keskietäisyydeltä' },
+  { k: 'long', l: 'Kaukaa', from: 'kaukaa' }, { k: 'wingL', l: 'Vasen laita', from: 'vasemmalta laidalta' },
+  { k: 'wingR', l: 'Oikea laita', from: 'oikealta laidalta' }, { k: 'behind', l: 'Maalin takaa', from: 'maalin takaa' },
 ];
 function sectorOf(n) {
-  const dx = RINK.goalX - n.x, dy = n.y - RINK.cy, m = RINK.perM;
-  if (dx < 0) return 'behind';
-  if (dx <= 10 * m && Math.abs(dy) <= 5 * m) return 'slot';
-  if (dx > 12 * m) return 'point';
-  return dy < 0 ? 'wingL' : 'wingR';
+  const z = n.zone || zoneOf(n.x, n.y);
+  return z === 'wing' ? (n.y < RINK.cy ? 'wingL' : 'wingR') : z;
 }
 function sectorProfiles(L, before) {
   const T = new Map(), blank = () => Object.fromEntries(SECTORS.map(s => [s.k, { att: 0, sog: 0, g: 0 }]));
@@ -263,20 +288,18 @@ function previewProfileHtml(P, sai, opp, oppName, oppTeam = null, L = null, befo
   const swap = typeof PV_SWAP !== 'undefined' && PV_SWAP;
   const mk = (t, id, name) => ({ t, d: dots[id], name, sai: id === SAIPA_NUM, gp: played(id) });
   const home = swap ? mk(O, opp, oppName) : mk(S, SAIPA_NUM, 'SaiPa'), away = swap ? mk(S, SAIPA_NUM, 'SaiPa') : mk(O, opp, oppName);
-  const m = RINK.perM, gx = RINK.goalX, cy = RINK.cy, p1 = gx - 12 * m;
-  const R = { point: [RINK.blue, 2, p1, 508], wingL: [p1, 2, gx, cy], wingR: [p1, cy, gx, 508], slot: [gx - 10 * m, cy - 5 * m, gx, cy + 5 * m], behind: [gx, 2, 998, 508] };
-  const LBL = { point: [700, 70, 30], wingL: [800, 70, 30], wingR: [800, 470, 30], slot: [865, 205, 30], behind: [966, 70, 26] };
+  const ZP = zonePaths();
+  const LBL = { long: [700, 70, 26], mid: [752, 264, 26], slot: [842, 264, 28], wingL: [880, 70, 28], wingR: [880, 466, 28], behind: [966, 160, 24] };
   const ICE = 'M 500 2 H 858 A 140 140 0 0 1 998 142 V 368 A 140 140 0 0 1 858 508 H 500 Z';
   const share = (x, side) => { const tot = SECTORS.reduce((a, s) => a + x.t[side][s.k].g, 0); return { tot, of: k => tot ? x.t[side][k].g / tot : 0 }; };
   let uid = 0;
   const pic = (x, side) => {
     const sh = share(x, side), id = `srC${++uid}`, max = Math.max(0.01, ...SECTORS.map(s => sh.of(s.k)));
     let shapes = '', labels = '';
-    // The slot rectangle sits inside the two wing rectangles, so it is drawn last to stay on top (hover and shade)
-    for (const s of [...SECTORS].sort((a, b) => (a.k === 'slot') - (b.k === 'slot'))) {
-      const [x0, y0, x1, y1] = R[s.k], [lx, ly, fs] = LBL[s.k], z = x.t[side][s.k], f = sh.of(s.k);
+    for (const s of SECTORS) {
+      const [lx, ly, fs] = LBL[s.k], z = x.t[side][s.k], f = sh.of(s.k);
       const tip = `${s.l}\n${side === 'f' ? 'Tehdyt maalit' : 'Päästetyt maalit'}\t${z.g} (${pct(f, 0)})\n${side === 'f' ? 'Laukausyritykset' : 'Vastustajan yritykset'}\t${num(z.att / x.t.n, 1)} / ott.`;
-      shapes += `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" class="sr" style="fill:rgba(26,26,26,${(0.03 + 0.2 * f / max).toFixed(2)})" data-tip="${esc(tip)}"/>`;
+      shapes += `<path d="${ZP[s.k]}" class="sr" style="fill:rgba(26,26,26,${(0.03 + 0.2 * f / max).toFixed(2)})" data-tip="${esc(tip)}"/>`;
       if (z.g) labels += `<text x="${lx}" y="${ly}" text-anchor="middle" class="sr-t" font-size="${fs}">${Math.round(f * 100)} %</text>`;
     }
     const pts = x.d[side].map(n => `<circle cx="${n.x}" cy="${n.y}" r="7" class="sr-dot${x.sai && side === 'f' ? ' s' : ''}"/>`).join('');
@@ -297,7 +320,7 @@ function previewProfileHtml(P, sai, opp, oppName, oppTeam = null, L = null, befo
     const A = share(att, 'f'), D = share(def, 'a');
     const c = SECTORS.flatMap(s => [{ s, x: att, w: 'tekee', v: A.of(s.k), n: A.tot }, { s, x: def, w: 'päästää', v: D.of(s.k), n: D.tot }])
       .filter(o => o.n >= 5).map(o => ({ ...o, d: o.v - lg(o.s.k) })).sort((a, b) => b.d - a.d)[0];
-    return c && c.d >= 0.08 ? `<div class="sr-best">Liigasta poikkeaa: <b>${esc(c.x.name)} ${c.w} ${c.s.l.toLowerCase().replace('maalin edusta', 'maalin edestä').replace('maalin takaa', 'maalin takaa').replace('siniviiva', 'siniviivalta').replace('vasen laita', 'vasemmalta laidalta').replace('oikea laita', 'oikealta laidalta')} ${pct(c.v, 0)}</b> · liiga ${pct(lg(c.s.k), 0)}</div>` : '';
+    return c && c.d >= 0.08 ? `<div class="sr-best">Liigasta poikkeaa: <b>${esc(c.x.name)} ${c.w} ${c.s.from} ${pct(c.v, 0)}</b> · liiga ${pct(lg(c.s.k), 0)}</div>` : '';
   };
   // Season view: SaiPa only, scored next to conceded, each compared with the league
   if (opp === SAIPA_NUM) {
