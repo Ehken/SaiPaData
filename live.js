@@ -1,14 +1,14 @@
 /* SaiPa Data: live view for a SaiPa game in progress (LV-1).
  * Self-contained add-on: to remove it, delete this file and its <script> tag in index.html. app.js only calls
  * liveGameId() / renderLive() when they exist.
- * While the game is on, the page fetches fresh data every 15 seconds (60 s in intermissions; keep the page open).
+ * While the game is on, the page fetches fresh data every 15 seconds (30 s in intermissions, 15 s from three minutes before the estimated restart; keep the page open).
  * Between fetches the game clock and penalty countdowns run locally at the pace the game clock moved during the
  * previous interval (so they stop when play is stopped) and snap to the real value on the next fetch.
  * It shows what the TV broadcast does not: win probability over the game, xG and pressure, special teams,
  * a feed of notable moments, the preview's picks against tonight, ice time, intermission summaries,
  * and the full game report below. */
 
-const LIVE_POLL_MS = 15000, LIVE_POLL_BREAK_MS = 60000;
+const LIVE_POLL_MS = 15000, LIVE_POLL_BREAK_MS = 30000;
 // Local clock: last known game time, when it was seen, and the game-clock pace (game s per real s) since the previous fetch
 let liveClock = null, liveTick = null, liveLog = [], liveNextMs = LIVE_POLL_MS;
 // Intermission clock. The API has no wall-clock time for a period's end, so the break starts when this page first
@@ -386,8 +386,14 @@ async function renderLive(id, box) {
       return;
     }
     const smA = Array.isArray(sm) ? sm : [], ctx = { sm: smA, sogFallback: null };
-    const t = G.gameTime || 0, per = G.currentPeriod || Math.min(4, Math.floor(t / 1200) + 1);
-    const intermission = !G.ended && t > 0 && t % 1200 === 0 && t < 3600;
+    // The game endpoint's clock can lag behind the shot map and the event lists (seen in KooKoo–Jukurit 9.10.2026:
+    // the clock still at 20:00 two minutes into the 2nd period). The latest event time is a floor for the clock,
+    // and a shot after the break means the break is over.
+    const t0 = G.gameTime || 0;
+    const evT = Math.max(0, ...smA.map(x => x.gameTime || 0), ...[G.homeTeam, G.awayTeam].flatMap(x => [...(x.goalEvents || []), ...(x.penaltyEvents || [])]).map(e => e.gameTime || 0));
+    const t = G.ended || LIVE_REPLAY ? t0 : Math.max(t0, Math.min(evT, 3900));
+    const per = t > t0 ? Math.min(4, Math.floor(t / 1200) + 1) : G.currentPeriod || Math.min(4, Math.floor(t / 1200) + 1);
+    const intermission = !G.ended && t > 0 && t % 1200 === 0 && t < 3600 && !smA.some(x => x.gameTime > t);
     // Clock sync: pace = how much the game clock moved per real second since the previous fetch (0 when play is stopped)
     { const now = Date.now(), prev = liveClock, moved = prev ? t - prev.t : 0;
       const rate = G.ended || intermission || LIVE_REPLAY || !prev ? 0 : Math.max(0, Math.min(1, moved / Math.max(1, (now - prev.wall) / 1000)));
@@ -404,8 +410,9 @@ async function renderLive(id, box) {
           liveBreak = { k, start: w, end: w ? w + breakLen(G.start) * 1000 : null };
         }
         const left = liveBreak.end ? liveBreak.end - now : null;
-        // Slow polling in the break, back to normal from one minute before the estimated restart
-        liveNextMs = left == null ? 30000 : left <= 60000 ? LIVE_POLL_MS : Math.min(LIVE_POLL_BREAK_MS, left - 60000 + 500);
+        // Slower polling in the break, back to normal from three minutes before the estimated restart (the break
+        // start is only known to the poll, and the league's clock can lag, so the restart can come earlier)
+        liveNextMs = left == null ? 30000 : left <= 180000 ? LIVE_POLL_MS : Math.min(LIVE_POLL_BREAK_MS, left - 180000 + 500);
       } else if (!intermission) liveBreak = null; }
     const d = reportData(g, st, smA);
     const score = { h: G.homeTeam.goals ?? 0, a: G.awayTeam.goals ?? 0 };
@@ -434,7 +441,7 @@ async function renderLive(id, box) {
       nowItems.push(`<div class="lv-now-i ${mineDown ? 'neg' : 'pos'}" data-tip="${esc(`${mineDown ? `Jäähyllä (${LV.fn})` : `Jäähyllä (${O.teamName})`}\n${who}`)}"><b>${mineDown ? 'Alivoima' : 'Ylivoima'}</b><span>${esc(LV.fn)} ${us} v ${them}</span><span class="lv-cd" data-cd="${end}">${left(arr)} jäljellä</span><i data-bar="${start},${end}" style="width:${Math.max(0, Math.min(100, (end - t) / Math.max(1, end - start) * 100))}%"></i></div>`);
     }
     if (intermission) { const be = liveBreak?.end;
-      nowItems.push(`<div class="lv-now-i mid" data-tip="${esc(be ? `Erätauko ${breakLen(G.start) / 60} min (${breakLen(G.start) === 1200 ? 'viikonloppu' : 'arkipäivä'})\nTauko alkoi noin klo ${new Date(liveBreak.start).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}\nArvio: ${t / 1200 + 1}. erä alkaa klo ${new Date(be).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}` : 'Tauon alkuhetki ei ole tiedossa, koska sivu avattiin kesken tauon')}"><b>Erätauko</b><span>${t / 1200}. erä päättyi</span>${be ? `<span class="lv-cd" data-wcd="${be}">${mmss(Math.max(0, Math.ceil((be - Date.now()) / 1000)))} jäljellä</span>` : ''}${be ? `<i data-wbar="${liveBreak.start},${be}" style="width:${Math.max(0, Math.min(100, (be - Date.now()) / (be - liveBreak.start) * 100))}%"></i>` : ''}</div>`); }
+      nowItems.push(`<div class="lv-now-i mid" data-tip="${esc(be ? `Erätauko ${breakLen(G.start) / 60} min (${breakLen(G.start) === 1200 ? 'viikonloppu' : 'arkipäivä'})\nTauko alkoi noin klo ${new Date(liveBreak.start).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}\nArvio: ${t / 1200 + 1}. erä alkaa klo ${new Date(be).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}` : 'Tauon alkuhetki ei ole tiedossa, koska sivu avattiin kesken tauon')}${be && Date.now() > be ? '\nErän pitäisi jo olla alkanut. Liigan data voi olla hetken jäljessä, tilanne päivittyy itsestään.' : ''}"><b>Erätauko</b><span>${t / 1200}. erä päättyi</span>${be ? `<span class="lv-cd" data-wcd="${be}">${mmss(Math.max(0, Math.ceil((be - Date.now()) / 1000)))} jäljellä</span>` : ''}${be ? `<i data-wbar="${liveBreak.start},${be}" style="width:${Math.max(0, Math.min(100, (be - Date.now()) / (be - liveBreak.start) * 100))}%"></i>` : ''}</div>`); }
     const lastGoal = d.goals.filter(x => x.valid && x.t <= t).pop();
     if (lastGoal && t - lastGoal.t <= 120 && !intermission) nowItems.push(`<div class="lv-now-i ${lastGoal.mine ? 'pos' : 'neg'}"><b>🚨 Maali</b><span>${esc(lastGoal.score)} · ${esc(lastGoal.scorer)}</span><span class="lv-cd">${mmss(t - lastGoal.t)} sitten</span></div>`);
     // Unanswered shot attempts by one team (e.g. 9–0), shown while still going
