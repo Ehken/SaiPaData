@@ -63,6 +63,17 @@ function attModel(byYear, years) {
   return { est: g => Math.min(cap, base(g) + oppEff(g.opp)), oppEff, opp, eff, cap, train };
 }
 
+// This season's level against an estimate: weekday and weekend games separately, each ratio pulled toward 1
+// while it rests on few games (weight n / (n + ATT_RATIO_K)). Chosen by backtesting 17 seasons (2007–2026):
+// it beat both the plain estimate and the unpulled ratios at every checkpoint (4–15 home games played).
+const ATT_RATIO_K = 3;
+function attRatio(played, isArki, est) {
+  const same = played.filter(g => (g.type === 'arki') === isArki);
+  if (!same.length) return { r: 1, n: 0, raw: 1 };
+  const raw = same.reduce((s, g) => s + g.spect, 0) / same.reduce((s, g) => s + est(g), 0), w = same.length / (same.length + ATT_RATIO_K);
+  return { r: w * raw + (1 - w), n: same.length, raw };
+}
+
 async function renderAttendanceForecast(el, games, curSched) {
   // Home games per season: earlier seasons from the history list, this season from the live schedule (incl. upcoming)
   const byYear = new Map();
@@ -80,17 +91,26 @@ async function renderAttendanceForecast(el, games, curSched) {
     const played = cur.filter(g => g.spect), rest = cur.filter(g => !g.spect), N = cur.length;
     cur.forEach(g => { g.bench = M.est(g); });
     // This season's level: played games against their own estimates, weekdays and weekends separately
-    const ratio = t => { const p = played.filter(g => (g.type === 'arki') === (t === 'arki')); return p.length ? p.reduce((s, g) => s + g.spect, 0) / p.reduce((s, g) => s + g.bench, 0) : 1; };
-    const rArki = ratio('arki'), rVkl = ratio('vkl');
+    const rArki = attRatio(played, true, g => g.bench).r, rVkl = attRatio(played, false, g => g.bench).r;
     // Tough: this season's weekday crowds against the comparison seasons' weekday crowds at the same stage
     const n = played.length, early = years.flatMap(y => (byYear.get(y) || []).slice(0, Math.max(n, 6))).filter(g => g.type === 'arki' && g.spect);
     const nowArki = played.filter(g => g.type === 'arki');
     const rTough = nowArki.length && early.length ? Math.min(1, (nowArki.reduce((s, g) => s + g.spect, 0) / nowArki.length) / (early.reduce((s, g) => s + g.spect, 0) / early.length)) : rArki;
     const rLow = Math.min(rArki, rTough);
+    // Pre-game forecast for played games: the comparison level corrected only with games played before it
+    // (same day type when there are any, otherwise all earlier games), so its error is an honest test
+    played.forEach((g, i) => {
+      const q = attRatio(played.slice(0, i), g.type === 'arki', o => o.bench);
+      g.preR = q.r; g.preN = q.n;
+      g.pre = Math.min(M.cap, g.bench * g.preR);
+    });
+    const mae = k => played.length ? played.reduce((s, g) => s + Math.abs(g.spect - g[k]), 0) / played.length : null;
+    const prevOnly = years.length === 1 && years[0] === avail[0];
+    const benchL = prevOnly ? 'Viime kauden taso' : 'Vertailukausien taso';
     const scen = [
-      { k: 'bench', l: 'Vertailukausien taso', d: 'Arviot sellaisenaan', f: () => 1 },
-      { k: 'cur', l: 'Tämän kauden taso', d: `Arkipelit ×${num(rArki, 2)}, viikonloput ×${num(rVkl, 2)}: toteutuneet suhteessa omiin arvioihinsa`, f: g => g.type === 'arki' ? rArki : rVkl },
-      { k: 'tough', l: 'Heikko kausi', d: `Arkipelit ×${num(rLow, 2)}, viikonloput ×${num(Math.min(1, rVkl), 2)}: heikompi kahdesta arkipelien vertailusta (omat arviot tai vertailukausien arkipelit samassa vaiheessa kautta), viikonloput enintään arvioiden tasolla`, f: g => g.type === 'arki' ? rLow : Math.min(1, rVkl) },
+      { k: 'cur', l: 'Tämän kauden taso', d: `Arkipelit ×${num(rArki, 2)}, viikonloput ×${num(rVkl, 2)}: tämän kauden toteutuneet suhteessa ${prevOnly ? 'viime kauden' : 'vertailukausien'} tasoon, vähillä otteluilla lähempänä ykköstä`, f: g => g.type === 'arki' ? rArki : rVkl },
+      { k: 'bench', l: benchL, d: `${prevOnly ? 'Viime kauden' : 'Vertailukausien'} taso sellaisenaan`, f: () => 1 },
+      { k: 'tough', l: 'Heikko kausi', d: `Arkipelit ×${num(rLow, 2)}, viikonloput ×${num(Math.min(1, rVkl), 2)}: arkipelit heikomman vertailun mukaan (tämän kauden taso tai vertailukausien arkipelit samassa vaiheessa kautta), viikonloput enintään ${benchL.toLowerCase()}lla`, f: g => g.type === 'arki' ? rLow : Math.min(1, rVkl) },
     ];
     const sumPlayed = played.reduce((s, g) => s + g.spect, 0);
     for (const s of scen) {
@@ -120,7 +140,7 @@ async function renderAttendanceForecast(el, games, curSched) {
     const line = (arr, from, to) => arr.slice(from, to + 1).map((v, j) => `${x(from + j)},${y(v)}`).join(' ');
     const ticks = []; for (let v = Math.ceil(lo / 250) * 250; v <= hi; v += 250) ticks.push(v);
     const lastP = n - 1;
-    const tipFor = i => { const g = cur[i]; return `${i + 1}. kotiottelu · ${fiDate(g.start)} ${attTypeFi[g.type]}\nVastustaja\t${g.opp}\n${g.spect ? `Yleisö\t${attNum(g.spect)}\nArvio\t${attNum(g.bench)}\nKeskiarvo tähän asti\t${attNum(scen[0].cum[i])}` : scen.map(s => `${s.l}\t${attNum(s.val.get(g))} · ka ${attNum(s.cum[i])}`).join('\n')}`; };
+    const tipFor = i => { const g = cur[i]; return `${i + 1}. kotiottelu · ${fiDate(g.start)} ${attTypeFi[g.type]}\nVastustaja\t${g.opp}\n${g.spect ? `Yleisö\t${attNum(g.spect)}\nEnnuste ennen ottelua\t${attNum(g.pre)}\n${benchL}\t${attNum(g.bench)}\nKeskiarvo tähän asti\t${attNum(scen[0].cum[i])}` : scen.map(s => `${s.l}\t${attNum(s.val.get(g))} · ka ${attNum(s.cum[i])}`).join('\n')}`; };
     const chart = `<svg viewBox="0 0 ${W} ${H}" class="gs-chart att-fc">
       ${ticks.map(v => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" class="gc-grid"/><text x="${m.l - 4}" y="${y(v) + 4}" class="gc-l" style="text-anchor:end">${attNum(v)}</text>`).join('')}
       <line x1="${m.l}" x2="${W - m.r}" y1="${y(ATT_TARGET)}" y2="${y(ATT_TARGET)}" class="att-target"/><text x="${m.l + 6}" y="${y(ATT_TARGET) - 5}" class="gc-l att-target-l" style="text-anchor:start">Tavoite ${attNum(ATT_TARGET)}</text>
@@ -139,14 +159,16 @@ async function renderAttendanceForecast(el, games, curSched) {
       const p = e.parts.find(q => q[0] === g.part); if (p) parts.push(`${g.part}\t${signed(p[1], 0)}`);
       if (g.last) parts.push(`Kauden viimeinen kotiottelu\t${signed(e.last, 0)}`); if (g.b2b) parts.push(`Tuplaottelu (sama vastustaja peräkkäin)\t${signed(e.b2b, 0)}`);
       const o = M.opp.get(g.opp); parts.push(o ? `${g.opp} (${o.n} vertailuottelua)\t${signed(M.oppEff(g.opp), 0)}` : `${g.opp}: ei vertailuotteluita\t±0`);
-      return `Arvio ${attNum(g.bench)}\n${parts.join('\n')}`; };
+      return `${benchL} ${attNum(g.bench)}\n${parts.join('\n')}`; };
+    const preTip = g => `Ennuste ennen ottelua ${attNum(g.pre)}\n${benchL}\t${attNum(g.bench)}\nKerroin\t×${num(g.preR, 2)}\n${g.preN ? `${g.preN} aiempaa ${g.type === 'arki' ? 'arkipeliä' : 'viikonloppupeliä'}` : `Ei aiempia ${g.type === 'arki' ? 'arkipelejä' : 'viikonloppupelejä'}: kerroin 1`}`;
+    const curTip = g => `Ennuste ${attNum(scen[0].val.get(g))}\n${benchL}\t${attNum(g.bench)}\nKerroin\t×${num(g.type === 'arki' ? rArki : rVkl, 2)} (${g.type === 'arki' ? 'arkipelit' : 'viikonloput'} tähän asti)`;
     const rows = cur.map((g, i) => `<tr class="${g.spect ? 'att-played' : ''}">
       <td>${['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'][g.d.getDay()]} ${fiDate(g.start)}</td><td>${esc(g.opp)}${g.b2b ? ' <small class="muted">tupla</small>' : ''}</td>
-      ${g.spect ? `<td><b>${attNum(g.spect)}</b></td><td data-tip="${esc(why(g))}">${attNum(g.bench)}</td><td class="${g.spect >= g.bench ? 'pos-num' : 'neg-num'}">${signed(g.spect - g.bench, 0)}</td><td></td><td></td>`
-        : `<td></td><td data-tip="${esc(why(g))}"><b>${attNum(g.bench)}</b></td><td></td><td>${attNum(scen[1].val.get(g))}</td><td>${attNum(scen[2].val.get(g))}</td>`}
+      ${g.spect ? `<td><b>${attNum(g.spect)}</b></td><td data-tip="${esc(preTip(g))}">${attNum(g.pre)}</td><td class="${g.spect >= g.pre ? 'pos-num' : 'neg-num'}">${signed(g.spect - g.pre, 0)}</td><td data-tip="${esc(why(g))}">${attNum(g.bench)}</td><td></td>`
+        : `<td></td><td data-tip="${esc(curTip(g))}"><b>${attNum(scen[0].val.get(g))}</b></td><td></td><td data-tip="${esc(why(g))}">${attNum(g.bench)}</td><td>${attNum(scen[2].val.get(g))}</td>`}
       <td class="muted small">${esc(comps(g))}</td></tr>`).join('');
     const th = (l, tip) => `<th data-tip="${esc(tip)}">${l}</th>`;
-    const table = `<div class="tablewrap"><table class="mini att-t"><thead><tr><th>Pvm</th><th>Vastustaja</th>${th('Yleisö', 'Toteutunut yleisömäärä')}${th('Arvio', 'Arvio vertailukausien tasolla. Hover näyttää, mistä arvio koostuu')}${th('Ero', 'Toteutunut miinus arvio')}${th('Kauden taso', 'Arvio tämän kauden tasolla')}${th('Heikko kausi', 'Arvio heikossa skenaariossa: arkipelit tämän kauden heikoimmalla tasolla, viikonloput enintään arvioiden tasolla')}<th>Vertailuottelut</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const table = `<div class="tablewrap"><table class="mini att-t"><thead><tr><th>Pvm</th><th>Vastustaja</th>${th('Yleisö', 'Toteutunut yleisömäärä')}${th('Ennuste', 'Tämän kauden tasolla. Pelatuissa otteluissa ennuste ennen ottelua, laskettuna vain sitä edeltäneistä otteluista')}${th('Ero', 'Toteutunut miinus ennuste')}${th(benchL, 'Mitä otteluun olisi tullut ' + benchL.toLowerCase() + 'lla. Hover näyttää, mistä luku koostuu')}${th('Heikko kausi', 'Heikossa skenaariossa: arkipelit tämän kauden heikoimmalla tasolla, viikonloput enintään ' + benchL.toLowerCase() + 'lla')}<th>Vertailuottelut</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     // Backtest: the same method one season back, from the same number of played games
     const bt = (() => {
       const tY = years[0], train = years.map(yy => yy - 1).filter(yy => byYear.has(yy));
@@ -154,22 +176,23 @@ async function renderAttendanceForecast(el, games, curSched) {
       const M2 = attModel(byYear, train), seas = byYear.get(tY); if (!M2 || !seas.length) return '';
       const k = Math.min(Math.max(n, 1), seas.length - 1), real = seas.reduce((s, g) => s + g.spect, 0) / seas.length;
       const p = seas.slice(0, k), r = seas.slice(k);
-      const rA = (() => { const a = p.filter(g => g.type === 'arki'); return a.length ? a.reduce((s, g) => s + g.spect, 0) / a.reduce((s, g) => s + M2.est(g), 0) : 1; })();
-      const rV = (() => { const a = p.filter(g => g.type !== 'arki'); return a.length ? a.reduce((s, g) => s + g.spect, 0) / a.reduce((s, g) => s + M2.est(g), 0) : 1; })();
+      const rA = attRatio(p, true, M2.est).r, rV = attRatio(p, false, M2.est).r;
       const fb = (p.reduce((s, g) => s + g.spect, 0) + r.reduce((s, g) => s + M2.est(g), 0)) / seas.length;
       const fc = (p.reduce((s, g) => s + g.spect, 0) + r.reduce((s, g) => s + Math.min(M2.cap, M2.est(g) * (g.type === 'arki' ? rA : rV)), 0)) / seas.length;
-      return ` Testi: kaudelle ${seasonLabel(tY)} samalla tavalla ${k} kotiottelun jälkeen laskettuna ”${scen[0].l}” antoi ${attNum(fb)} ja ”${scen[1].l}” ${attNum(fc)}. Toteutui ${attNum(real)}.`;
+      return ` Testi kaudella ${seasonLabel(tY)}, laskettuna ${k} kotiottelun jälkeen: edellisen kauden taso antoi ${attNum(fb)}, kauden tasolla korjattu ${attNum(fc)}. Toteutui ${attNum(real)}.`;
     })();
     const e = M.eff;
-    const how = `<details class="sf-how"><summary>Miten arvio lasketaan</summary><ol>
+    const how = `<details class="sf-how"><summary>Miten ennuste lasketaan</summary><ol>
       <li><b>Vertailukaudet</b>: ${years.map(seasonLabel).join(', ')} (${M.train.length} kotiottelua). Oletuksena edellinen kausi; valitse useampi napeista.</li>
       <li><b>Viikonpäivä</b> verrattuna arki-iltaan (ma–to): perjantai ${signed(e.pe, 0)}, lauantai ja sunnuntai ${signed(e.la, 0)}.</li>
       <li><b>Kauden vaihe</b> verrattuna syys–lokakuuhun: ${e.parts.map(([p, v]) => `${p} ${signed(v, 0)}`).join(', ')}. Pyhät = 20.12.–6.1.</li>
       <li><b>Erikoistapaukset</b>: kauden viimeinen kotiottelu ${signed(e.last, 0)}, tuplaottelu samaa vastustajaa vastaan peräkkäisinä päivinä ${signed(e.b2b, 0)} per ottelu.</li>
       <li><b>Vastustaja</b>: kuinka paljon vastustaja on vetänyt yli tai alle odotuksen vertailukausilla. Vähillä otteluilla vaikutusta pienennetään. Uusi vastustaja saa nollan.</li>
-      <li><b>Katto</b>: arvio ei ylitä suurinta vertailukausien yleisöä (${attNum(M.cap)}).</li>
+      <li><b>Katto</b>: ennuste ei ylitä suurinta vertailukausien yleisöä (${attNum(M.cap)}).</li>
+      ${SEASON === 2027 ? '<li><b>Lippujen hinnat</b> nousivat tälle kaudelle selvästi, joten viime kauden taso ei sellaisenaan kelpaa ennusteeksi. Siksi ennuste korjataan tämän kauden toteutuneella tasolla.</li>' : ''}
+      <li><b>Ennuste</b> = taso × tämän kauden kerroin, arki- ja viikonloppupeleille erikseen. Kerroin on toteutunut yleisö suhteessa tasoon, mutta muutamalla ottelulla sitä vedetään kohti ykköstä (3 ottelua: puoliväliin). Tämä osui kauden keskiarvoon parhaiten, kun tapaa testattiin kausilla 2007–2026.</li>
       <li><b>Skenaariot</b>: ${scen.map(s => `${s.l}: ${s.d.charAt(0).toLowerCase() + s.d.slice(1)}`).join('. ')}.</li></ol></details>`;
-    el.innerHTML = `<h2>Yleisöennuste</h2>${picker}${chips}${chart}${table}<p class="muted small">Toteutuneet yleisömäärät korvaavat arviot heti, kun Liiga on ne kirjannut.${bt}</p>${how}`;
+    el.innerHTML = `<h2>Yleisöennuste</h2>${picker}${chips}${chart}${table}<p class="muted small">${played.length >= 2 ? `Ennen ottelua lasketun ennusteen keskimääräinen heitto ${attNum(mae('pre'))} katsojaa (${benchL.toLowerCase()} sellaisenaan: ${attNum(mae('bench'))}). Yksittäinen ottelu heittää aina satoja katsojia; kauden keskiarvo on paljon vakaampi. ` : ''}Toteutuneet yleisömäärät korvaavat ennusteet heti, kun Liiga on ne kirjannut.${bt}</p>${how}`;
     el.querySelectorAll('.att-years .sbtn').forEach(b => b.onclick = () => {
       const yy = +b.dataset.y; years = years.includes(yy) ? (years.length > 1 ? years.filter(v => v !== yy) : years) : [...years, yy].sort((a, c) => c - a); draw();
     });
