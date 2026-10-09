@@ -11,7 +11,7 @@ const span = (a, b) => Math.floor(a / 1200) === Math.floor(b / 1200) || (b % 120
 
 // Collect everything the extras need from the raw game data
 function reportData(g, st, sm) {
-  const home = isSaipa(g.game.homeTeam.teamId);
+  const F = focusNum(g), home = teamNum(g.game.homeTeam.teamId) === F;
   const S = home ? g.game.homeTeam : g.game.awayTeam, O = home ? g.game.awayTeam : g.game.homeTeam;
   const names = new Map([...(g.homeTeamPlayers || []), ...(g.awayTeamPlayers || [])].map(p => [p.id, `${p.firstName} ${p.lastName}`]));
   const goals = [];
@@ -30,14 +30,14 @@ function reportData(g, st, sm) {
     const begin = p.penaltyBegintime ?? p.gameTime;
     penalties.push({ mine, called: p.gameTime, t: begin, end: p.penaltyEndtime || begin + (p.penaltyMinutes || 0) * 60, min: p.penaltyMinutes, name: p.penaltyFaultName, player: names.get(p.playerId) || '' });
   }
-  const shots = (sm || []).map(x => ({ mine: x.shootingTeamId === SAIPA_NUM, t: x.gameTime, type: x.eventType }));
+  const shots = (sm || []).map(x => ({ mine: x.shootingTeamId === F, t: x.gameTime, type: x.eventType }));
   const end = Math.max(3600, g.game.gameTime || 0, ...goals.map(x => x.t));
   const so = g.game.finishedType === 'ENDED_DURING_WINNING_SHOT_COMPETITION';
   // Score excluding the shootout-deciding goal
   const gf = goals.filter(x => x.valid && x.mine).length, ga = goals.filter(x => x.valid && !x.mine).length;
   // now: game time of a game in progress (null when finished), used to stop the timeline at the present moment
   const now = g.game.ended || !g.game.started ? null : (g.game.gameTime || 0);
-  return { home, S, O, goals, penalties, shots, end, now, so, gf, ga, xgf: S.expectedGoals, xga: O.expectedGoals,
+  return { home, F, sName: S.teamName, S, O, goals, penalties, shots, end, now, so, gf, ga, xgf: S.expectedGoals, xga: O.expectedGoals,
     ppGF: goals.filter(x => x.valid && x.mine && x.types.some(t => t.startsWith('YV'))).length,
     ppGA: goals.filter(x => x.valid && !x.mine && x.types.some(t => t.startsWith('YV'))).length,
     shGF: goals.filter(x => x.valid && x.mine && x.types.some(t => t.startsWith('AV'))).length,
@@ -68,14 +68,14 @@ function deservedHtml(d, gkSai, oppName) {
   if (d.ppGF || d.ppGA) special.push(`YV-maalit ${pair(d.ppGF, d.ppGA)}`);
   if (d.shGF || d.shGA) special.push(`AV-maalit ${pair(d.shGF, d.shGA)}`);
   if (d.enGF || d.enGA) special.push(`tyhjiin ${pair(d.enGF, d.enGA)}`);
-  const teams = esc(hf(d.home, 'SaiPa', oppName).join('–'));
+  const teams = esc(hf(d.home, d.sName, oppName).join('–'));
   return `<div class="card live-hide">
     <h2><span class="tag">Tulos vs. maalipaikat</span></h2>
     <div class="dr">
       <div class="dr-score"><div class="k">Maalit</div><div class="dr-big">${pair(d.gf, d.ga)}</div><div class="muted small">${teams}${d.so ? ' · ilman voittolaukausta' : ''}</div></div>
       <div class="dr-score"><div class="k">Odotetut maalit</div><div class="dr-big">${pair(num(d.xgf, 2), num(d.xga, 2))}</div><div class="muted small">${teams}</div></div>
-      ${part('SaiPan viimeistely', fin, `maalit − xG · ${d.gf} maalia, xG ${num(d.xgf, 2)}`)}
-      ${part('SaiPan maalivahti', gk, `xGA − päästetyt · ${d.ga} päästettyä${gkSai ? ' · ' + esc(gkSai) : ''}`)}
+      ${part(`${gen(d.sName)} viimeistely`, fin, `maalit − xG · ${d.gf} maalia, xG ${num(d.xgf, 2)}`)}
+      ${part(`${gen(d.sName)} maalivahti`, gk, `xGA − päästetyt · ${d.ga} päästettyä${gkSai ? ' · ' + esc(gkSai) : ''}`)}
     </div>
     ${special.length ? `<p class="muted small">${special.join(' · ')}</p>` : ''}
   </div>`;
@@ -87,19 +87,19 @@ function periodVsGame(rows, saiName, oppName, home, gameXg) {
   const tot = rows.reduce((t, r) => ({ sg: t.sg + r.sg, og: t.og + r.og, sxg: t.sxg + r.sxg, oxg: t.oxg + r.oxg, ssh: t.ssh + r.ssh, osh: t.osh + r.osh, spk: t.spk + (r.spk || 0), opk: t.opk + (r.opk || 0) }), { sg: 0, og: 0, sxg: 0, oxg: 0, ssh: 0, osh: 0, spk: 0, opk: 0 });
   // The total uses the game's official xG so it matches the scoreboard (period sums can differ by rounding)
   if (gameXg?.sxg != null && gameXg?.oxg != null) Object.assign(tot, gameXg);
-  const names = hf(home, 'SaiPa', oppName).join(' – ');
+  const names = hf(home, saiName, oppName).join(' – ');
   // Fenwick (unblocked attempts) and even-strength PDO from the shot map
   const sm = typeof GAME_SM !== 'undefined' ? GAME_SM : [];
   const extra = n => {
     const x = sm.filter(q => n == null || q.period === n);
     if (!x.length) return [];
-    const mine = q => q.shootingTeamId === SAIPA_NUM;
+    const mine = q => q.shootingTeamId === GAME_FOCUS;
     const fen = m => x.filter(q => mine(q) === m && q.eventType !== 'PLAYER_BLOCKED').length;
     const ev = x.filter(q => q.type === 'EvenStrengthShot' && isSog(q));
     const sh = m => { const t = ev.filter(q => mine(q) === m); return t.length ? t.filter(q => q.eventType === 'GOAL').length / t.length : null; };
     const ss = sh(true), os = sh(false);
     const pdo = ss != null && os != null ? (ss + 1 - os) * 100 : null;
-    return [`Fenwick\t${hf(home, fen(true), fen(false)).join('–')}`, ...(pdo != null ? [`PDO tasakentin (SaiPa)\t${num(pdo, 1)}`] : [])];
+    return [`Fenwick\t${hf(home, fen(true), fen(false)).join('–')}`, ...(pdo != null ? [`PDO tasakentin (${saiName})\t${num(pdo, 1)}`] : [])];
   };
   const line = (label, r) => {
     const tip = [`${label}\t${names}`, `Maalit\t${hf(home, r.sg, r.og).join('–')}`, `xG\t${hf(home, num(r.sxg, 2), num(r.oxg, 2)).join('–')}`,
@@ -147,7 +147,7 @@ function flowHtml(d, oppName) {
     const cx = x(g.t), col = g.mine ? 'var(--yellow)' : '#6f6f6a';
     const stroke = g.valid ? '#111' : '#c0392b';
     return `<g><line x1="${cx}" x2="${cx}" y1="${m.t - 6}" y2="${H - m.b}" stroke="${g.valid ? col : '#c0392b'}" stroke-width="${g.valid ? 2 : 1}" ${g.valid ? '' : 'stroke-dasharray="2 2"'} opacity=".8"/>
-      <circle cx="${cx}" cy="${m.t - 6}" r="7" fill="${g.valid ? col : '#fff'}" stroke="${stroke}" stroke-width="1.5" data-tip="${esc([`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? 'SaiPa' : oppName} · ${inPeriod(g.t)}`, ...(g.valid ? [`Tekijä\t${g.scorer}`, `Syöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}`] : [])].join('\n'))}"/></g>`;
+      <circle cx="${cx}" cy="${m.t - 6}" r="7" fill="${g.valid ? col : '#fff'}" stroke="${stroke}" stroke-width="1.5" data-tip="${esc([`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? d.sName : oppName} · ${inPeriod(g.t)}`, ...(g.valid ? [`Tekijä\t${g.scorer}`, `Syöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}`] : [])].join('\n'))}"/></g>`;
   }).join('');
   const penRow = (L, mine, y0) => L.list.map(p => {
     const tip = [`${esc(p.player)}`, `Rike\t${esc(p.name)}`, `Rangaistus\t${p.min} min`, `Tuomittu\t${inPeriod(p.called)}`, ...(p.t > p.called ? [`Alkoi\t${inPeriod(p.t)}`] : []), `Päättyi\t${(t => t > 0 && t % 1200 === 0 && t <= 3600 ? `${t / 1200}. erä 20:00` : inPeriod(t))(Math.min(p.end, end))}`, ].join('\n');
@@ -161,7 +161,7 @@ function flowHtml(d, oppName) {
   const abbr = n => esc(n.slice(0, 3).toUpperCase());
   const mo = momentum(d);
   const moChips = mo ? [
-    mo.mine && mo.mine.m - mo.mine.o >= 3 ? { cls: 'mine', k: 'Kovin painostus (SaiPa)', v: span(mo.mine.a, mo.mine.a + 300), s: `Laukausyritykset ${hf(d.home, mo.mine.m, mo.mine.o).join('–')}` } : null,
+    mo.mine && mo.mine.m - mo.mine.o >= 3 ? { cls: 'mine', k: `Kovin painostus (${d.sName})`, v: span(mo.mine.a, mo.mine.a + 300), s: `Laukausyritykset ${hf(d.home, mo.mine.m, mo.mine.o).join('–')}` } : null,
     mo.opp && mo.opp.o - mo.opp.m >= 3 ? { cls: 'opp', k: `Kovin painostus (${esc(oppName)})`, v: span(mo.opp.a, mo.opp.a + 300), s: `Laukausyritykset ${hf(d.home, mo.opp.m, mo.opp.o).join('–')}` } : null,
   ].filter(Boolean) : [];
   const band = mo?.mine && mo.mine.m - mo.mine.o >= 3 ? `<rect x="${x(mo.mine.a)}" y="${m.t}" width="${x(mo.mine.a + 300) - x(mo.mine.a)}" height="${H - m.t - m.b}" fill="var(--yellow)" opacity=".12"/>` : '';
@@ -172,14 +172,14 @@ function flowHtml(d, oppName) {
     <div class="flow-wrap"><svg class="flow" viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Ottelun virta">
       ${nowMark}${band}${band2}${periodLines}${periodLabels}
       ${hasShots ? `<path d="${path(oT)}" fill="none" stroke="#6f6f6a" stroke-width="2.5"/><path d="${path(sT)}" fill="none" stroke="#e0b400" stroke-width="3"/>
-      <text x="${xe + 6}" y="${y(sT.length) + (sT.length >= oT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#8a6d00">SaiPa ${sT.length}</text>
+      <text x="${xe + 6}" y="${y(sT.length) + (sT.length >= oT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#8a6d00">${esc(d.sName)} ${sT.length}</text>
       <text x="${xe + 6}" y="${y(oT.length) + (oT.length > sT.length ? -2 : 12)}" font-size="12" font-weight="700" fill="#555">${esc(oppName)} ${oT.length}</text>` : ''}
       ${goalMarks}
       ${penRow(LS, true, yS)}${penRow(LO, false, yO)}
       <text x="${m.l - 6}" y="${yS + 7}" font-size="10" text-anchor="end" fill="#6b6b6b">SAI</text>
       <text x="${m.l - 6}" y="${yO + 7}" font-size="10" text-anchor="end" fill="#6b6b6b">${abbr(oppName)}</text>
     </svg></div>
-    <div class="legend">${hf(d.home, '<span><i style="background:#e0b400"></i>SaiPa</span>', `<span><i style="background:#6f6f6a"></i>${esc(oppName)}</span>`).join('')}<span class="muted">viiva = laukausyritykset · ● maali · ○ hylätty · palkit = jäähyt</span></div>
+    <div class="legend">${hf(d.home, `<span><i style="background:#e0b400"></i>${esc(d.sName)}</span>`, `<span><i style="background:#6f6f6a"></i>${esc(oppName)}</span>`).join('')}<span class="muted">viiva = laukausyritykset · ● maali · ○ hylätty · palkit = jäähyt</span></div>
     ${moChips.length ? `<div class="flow-mo">${(d.home ? moChips : [...moChips].reverse()).map(c => `<div class="fm ${c.cls}"><div class="k">${c.k}</div><div class="v">${c.v}</div><div class="s">${c.s}</div></div>`).join('')}</div>` : ''}
   </div>`;
 }
@@ -189,7 +189,7 @@ function goalsHtml(d, gameId, season) {
   const rows = d.goals.map(g => `<div class="gl ${g.mine ? 'mine' : ''} ${g.valid ? '' : 'void'}">
       <div class="gl-t">${inPeriod(g.t)}</div>
       <div class="gl-s">${g.valid ? g.score : '–'}</div>
-      <div class="gl-p"><b>${g.valid || g.scorer !== '?' ? esc(g.scorer) : (g.mine ? 'SaiPa' : 'Vastustaja')}</b>${g.assists.length ? ` <span class="muted">(${g.assists.map(esc).join(', ')})</span>` : ''}
+      <div class="gl-p"><b>${g.valid || g.scorer !== '?' ? esc(g.scorer) : (g.mine ? d.sName : 'Vastustaja')}</b>${g.assists.length ? ` <span class="muted">(${g.assists.map(esc).join(', ')})</span>` : ''}
         ${g.types.map(t => `<span class="badge">${esc(GOAL_TYPE_LABEL[t] || t)}</span>`).join(' ')}
         ${g.valid ? '' : '<span class="badge b-luck">Hylätty videotarkistuksessa</span>'}${g.winning && g.valid ? '<span class="badge b-fire">Voittomaali</span>' : ''}</div>
     </div>`).join('');

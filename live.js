@@ -19,6 +19,12 @@ let liveBreak = null;
 let liveFeedOpen = false, liveFeedSeen = 0, liveFeedDocBound = false;
 const breakLen = start => ['Sat', 'Sun'].includes(new Date(start).toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'Europe/Helsinki' })) ? 1200 : 1080;
 let liveTimer = null, livePeriod = 'all', liveSeen = new Set(), liveNotify = false, liveFirstT = new Map();
+// Point of view of the game on screen: SaiPa in SaiPa's games; in other games the home team by default, and the
+// viewer can switch to the away team (FOCUS_PICK, per game). fn = team name, gen = genitive, neutral = not SaiPa.
+let LV = { fn: 'SaiPa', gen: 'SaiPan', neutral: false };
+const FOCUS_PICK = new Map();
+const lvSet = g => { const fn = focusName(g); LV = { fn, gen: gen(fn), neutral: focusNum(g) !== SAIPA_NUM }; };
+const lvShown = box => !box.closest('.view') || box.closest('.view').classList.contains('active');
 
 // Test mode: ?game=ID&tab=live&replay=1 replays a played SaiPa game with a time slider. The real data is cut
 // to the chosen moment: goals, penalties and shots by their time, player stats by finished periods (the current
@@ -136,10 +142,10 @@ function wpChart(pre, d, t, home, xgNow, en) {
   const line = pts.map(([s, v]) => `${x(s)},${y(v)}`).join(' ');
   const area = `${x(0)},${y(0.5)} ${line} ${x(t)},${y(0.5)}`;
   const per = [1200, 2400, 3600].filter(s => s < end).map(s => `<line x1="${x(s)}" x2="${x(s)}" y1="${m.t}" y2="${H - m.b}" class="gc-grid"/>`).join('');
-  const gm = goals.map(g => `<circle cx="${x(g.t)}" cy="${y(P(scoreAt(g.t), g.t))}" r="5" class="${g.mine ? 'wp-g s' : 'wp-g'}" data-tip="${esc(`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? 'SaiPa' : d.O.teamName} · ${inPeriod(g.t)}\nTekijä\t${g.scorer}\nSyöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}\nSaiPan voittotodennäköisyys\t${pct(P(scoreAt(g.t), g.t), 0)}`)}"/>`).join('');
-  const pen = d.penalties.filter(p => p.t <= t && p.min < 10).map(p => `<g data-tip="${esc(`Jäähy · ${p.mine ? 'SaiPa' : d.O.teamName}\n${p.player}${p.name ? `\t${p.name}` : ''}\n${p.min} min\t${inPeriod(p.t)}–${inPeriod(Math.min(p.end, Math.max(t, p.t)))}`)}"><rect x="${x(p.t)}" y="${H - m.b - 10}" width="${Math.max(6, x(Math.min(p.end, t)) - x(p.t))}" height="12" fill="transparent"/><rect x="${x(p.t)}" y="${H - m.b - 4}" width="${Math.max(2, x(Math.min(p.end, t)) - x(p.t))}" height="4" class="${p.mine ? 'wp-p s' : 'wp-p'}"/></g>`).join('');
+  const gm = goals.map(g => `<circle cx="${x(g.t)}" cy="${y(P(scoreAt(g.t), g.t))}" r="5" class="${g.mine ? 'wp-g s' : 'wp-g'}" data-tip="${esc(`${g.valid ? `Maali ${g.score}${g.types.length ? ` (${g.types.join(', ')})` : ''}` : 'Hylätty maali'} · ${g.mine ? LV.fn : d.O.teamName} · ${inPeriod(g.t)}\nTekijä\t${g.scorer}\nSyöttäjät\t${g.assists.length ? g.assists.join(', ') : 'ei syöttäjiä'}\n${LV.gen} voittotodennäköisyys\t${pct(P(scoreAt(g.t), g.t), 0)}`)}"/>`).join('');
+  const pen = d.penalties.filter(p => p.t <= t && p.min < 10).map(p => `<g data-tip="${esc(`Jäähy · ${p.mine ? LV.fn : d.O.teamName}\n${p.player}${p.name ? `\t${p.name}` : ''}\n${p.min} min\t${inPeriod(p.t)}–${inPeriod(Math.min(p.end, Math.max(t, p.t)))}`)}"><rect x="${x(p.t)}" y="${H - m.b - 10}" width="${Math.max(6, x(Math.min(p.end, t)) - x(p.t))}" height="12" fill="transparent"/><rect x="${x(p.t)}" y="${H - m.b - 4}" width="${Math.max(2, x(Math.min(p.end, t)) - x(p.t))}" height="4" class="${p.mine ? 'wp-p s' : 'wp-p'}"/></g>`).join('');
   const cols = pts.filter((_, i) => i % 2 === 0 || i === pts.length - 1);
-  const tips = cols.map(([s, v]) => { const sc = scoreAt(s); return `${s >= 3600 ? 'JA' : `${Math.floor(s / 1200) + 1}. erä`} ${mmss(s % 1200)}\nTilanne\t${sc.h}–${sc.a}\nSaiPan voitto\t${pct(v, 0)}`; });
+  const tips = cols.map(([s, v]) => { const sc = scoreAt(s); return `${s >= 3600 ? 'JA' : `${Math.floor(s / 1200) + 1}. erä`} ${mmss(s % 1200)}\nTilanne\t${sc.h}–${sc.a}\n${LV.gen} voitto\t${pct(v, 0)}`; });
   return `<div class="lv-wp"><h3>Voittotodennäköisyys ottelun aikana</h3>
     <svg viewBox="0 0 ${W} ${H}" class="gs-chart">
       ${[0.25, 0.75].map(v => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" class="gc-grid"/>`).join('')}
@@ -163,13 +169,13 @@ function liveAlerts(d, t, full, oppName, xgf, xga, sf, sa) {
   for (const x of sh) { if (cur && x.mine === cur.mine) { cur.n++; cur.t = x.t; } else { cur = { mine: x.mine, n: 1, t0: x.t, t: x.t }; runs.push(cur); } }
   const span = (a, b) => Math.floor(a / 1200) === Math.floor(b / 1200) && b < 3600 ? `${Math.floor(a / 1200) + 1}. erä ${mmss(a % 1200)}–${mmss(b % 1200)}` : `${ptime(a)} – ${ptime(b)}`;
   for (const r of runs.filter(r => r.n >= 5)) out.push({ t: r.t0, key: `run${r.t0}`, tone: r.mine ? 'pos' : 'neg',
-    txt: `🌊 ${r.mine ? 'SaiPa' : esc(oppName)} ${r.n}–0 laukausyrityksissä · ${r === cur ? `jatkuu, alkoi ${ptime(r.t0)}` : span(r.t0, r.t)}` });
+    txt: `🌊 ${r.mine ? esc(LV.fn) : esc(oppName)} ${r.n}–0 laukausyrityksissä · ${r === cur ? `jatkuu, alkoi ${ptime(r.t0)}` : span(r.t0, r.t)}` });
   // No SaiPa attempt in the last 5 minutes
   const lastMine = [...sh].reverse().find(x => x.mine);
-  if (t > 600 && (!lastMine || t - lastMine.t >= 300)) out.push({ t, key: `dry${Math.floor(t / 300)}`, txt: `SaiPalta ei laukausyritystä ${Math.floor((t - (lastMine?.t || 0)) / 60)} minuuttiin`, tone: 'neg' });
+  if (t > 600 && (!lastMine || t - lastMine.t >= 300)) out.push({ t, key: `dry${Math.floor(t / 300)}`, txt: LV.neutral ? `${esc(LV.fn)}: ei laukausyritystä ${Math.floor((t - (lastMine?.t || 0)) / 60)} minuuttiin` : `SaiPalta ei laukausyritystä ${Math.floor((t - (lastMine?.t || 0)) / 60)} minuuttiin`, tone: 'neg' });
   // Goals: score home-first, scorer, assists and the situation (YV/AV/TM...)
   for (const g of d.goals.filter(x => x.t <= t)) out.push({ t: g.t, key: `goal${g.t}${g.valid}`,
-    txt: g.valid ? `🚨 Maali ${esc(g.score)}${g.types.length ? ` (${esc(g.types.join(', '))})` : ''} · ${g.mine ? 'SaiPa' : esc(oppName)}: <b>${esc(g.scorer)}</b>${g.assists.length ? ` <span class="muted">(${g.assists.map(esc).join(', ')})</span>` : ''}` : `Hylätty maali · ${g.mine ? 'SaiPa' : esc(oppName)}`,
+    txt: g.valid ? `🚨 Maali ${esc(g.score)}${g.types.length ? ` (${esc(g.types.join(', '))})` : ''} · ${g.mine ? esc(LV.fn) : esc(oppName)}: <b>${esc(g.scorer)}</b>${g.assists.length ? ` <span class="muted">(${g.assists.map(esc).join(', ')})</span>` : ''}` : `Hylätty maali · ${g.mine ? esc(LV.fn) : esc(oppName)}`,
     tone: g.valid ? (g.mine ? 'pos goal' : 'neg goal') : '' });
   // Penalties: state who got what. Whistles at the same moment are one line, and no PP/PK claim is made here
   // (simultaneous penalties often cancel out; the strip under the score shows the real manpower).
@@ -179,7 +185,7 @@ function liveAlerts(d, t, full, oppName, xgf, xga, sf, sa) {
   for (const p of d.penalties.filter(p => (p.called ?? p.t) <= t)) { const k = p.called ?? p.t; if (!penAt.has(k)) penAt.set(k, []); penAt.get(k).push(p); }
   for (const [pt, ps] of penAt) {
     const one = p => `${esc(p.player)}${p.name ? `, ${esc(p.name)}` : ''} ${p.min} min`;
-    const team = mine => mine ? 'SaiPa' : esc(oppName);
+    const team = mine => mine ? esc(LV.fn) : esc(oppName);
     // Pair off equal penalties of the two teams; what is left changes manpower
     const opp = ps.filter(p => !p.mine), pairs = [], rest = [];
     for (const m of ps.filter(p => p.mine)) { const i = opp.findIndex(o => o.min === m.min && o.min < 10); if (i >= 0) pairs.push([m, opp.splice(i, 1)[0]]); else rest.push(m); }
@@ -192,8 +198,8 @@ function liveAlerts(d, t, full, oppName, xgf, xga, sf, sa) {
   const gk = full.goalies.find(x => x.played);
   if (gk && gk.gsax >= 1) out.push({ t, key: `gkp${gk.id}`, txt: `${/^piiroinen$/i.test(gk.last) ? '<b>PII-ROI-NEN!</b>' : esc(gk.last)} ${signed(gk.gsax, 1)} GSAx: torjunut selvästi enemmän kuin laukaisupaikat antaisivat odottaa`, tone: 'pos' });
   if (gk && gk.gsax <= -1) out.push({ t, key: `gkn${gk.id}`, txt: `${esc(gk.last)} ${signed(gk.gsax, 1)} GSAx: torjunnat jäävät odotetusta`, tone: 'neg' });
-  if (xgf != null && xgf - xga >= 0.8 && sf < sa) out.push({ t, key: `xgl${sf}${sa}`, txt: `SaiPa luo maalipaikkoja, mutta on silti tappiolla (xG ${hf(d.home, num(xgf, 1), num(xga, 1)).join('–')})`, tone: 'pos' });
-  if (xgf != null && xga - xgf >= 0.8 && sf > sa) out.push({ t, key: `xgw${sf}${sa}`, txt: `SaiPa johtaa, vaikka ${esc(oppName)} luo enemmän maalipaikkoja (xG ${hf(d.home, num(xgf, 1), num(xga, 1)).join('–')})`, tone: 'neg' });
+  if (xgf != null && xgf - xga >= 0.8 && sf < sa) out.push({ t, key: `xgl${sf}${sa}`, txt: `${esc(LV.fn)} luo maalipaikkoja, mutta on silti tappiolla (xG ${hf(d.home, num(xgf, 1), num(xga, 1)).join('–')})`, tone: 'pos' });
+  if (xgf != null && xga - xgf >= 0.8 && sf > sa) out.push({ t, key: `xgw${sf}${sa}`, txt: `${esc(LV.fn)} johtaa, vaikka ${esc(oppName)} luo enemmän maalipaikkoja (xG ${hf(d.home, num(xgf, 1), num(xga, 1)).join('–')})`, tone: 'neg' });
   return out.sort((a, b) => b.t - a.t);
 }
 
@@ -287,7 +293,7 @@ function periodBreakHtml(g, st, ctx, t, home, intermission, d) {
   if (done.length > 1) rows.push(`<tr class="tot"><th>Yhteensä</th>${cells(stats(done), '<td></td>')}</tr>`);
   const th = (abbr, en, fi) => `<th data-tip="${esc(`${en}\n${fi}, ${H}–${A}`)}">${abbr}</th>`;
   return `<div class="lv-sec lv-brk ${intermission ? 'on' : ''}"><h3>${intermission ? `☕ Erätauko · ${n}. erä päättyi` : 'Erät'}</h3>
-    <div class="tablewrap"><table class="lv-ptab"><thead><tr><th></th>${th('G', 'Goals', 'Maalit (YV = ylivoimamaalit)')}${th('xG', 'Expected Goals', 'Maaliodottama')}${th('SOG', 'Shots on Goal', 'Laukaukset maalia kohti')}${th('CF', 'Corsi For', 'Laukausyritykset: maalia kohti, ohi ja blokatut')}${th('PC%', 'Puck Control', 'Kiekonhallinta-aika osuutena')}${th('PIM', 'Penalties in Minutes', 'Jäähyminuutit')}<th data-tip="${esc('SaiPan paras pelipisteillä (GS)')}">⭐ Erän tähti</th></tr></thead>
+    <div class="tablewrap"><table class="lv-ptab"><thead><tr><th></th>${th('G', 'Goals', 'Maalit (YV = ylivoimamaalit)')}${th('xG', 'Expected Goals', 'Maaliodottama')}${th('SOG', 'Shots on Goal', 'Laukaukset maalia kohti')}${th('CF', 'Corsi For', 'Laukausyritykset: maalia kohti, ohi ja blokatut')}${th('PC%', 'Puck Control', 'Kiekonhallinta-aika osuutena')}${th('PIM', 'Penalties in Minutes', 'Jäähyminuutit')}<th data-tip="${esc(`${LV.gen} paras pelipisteillä (GS)`)}">⭐ Erän tähti</th></tr></thead>
     <tbody>${rows.join('')}</tbody></table></div></div>`;
 }
 
@@ -316,14 +322,14 @@ function liveTickDraw(box) {
 // Team games and league data are loaded once; the lineup is re-read on every refresh (it is published on game day).
 let pregameData = null;
 async function pregameHtml(next, g, pre, home) {
-  const G = g.game, homeId = teamNum(next.homeTeamId), awayId = teamNum(next.awayTeamId), oppId = home ? awayId : homeId;
-  if (!pregameData || pregameData.id !== next.id) {
+  const G = g.game, homeId = teamNum(next.homeTeamId), awayId = teamNum(next.awayTeamId), oppId = home ? awayId : homeId, F = home ? homeId : awayId;
+  if (!pregameData || pregameData.id !== next.id || pregameData.F !== F) {
     const league = await loadLeague();
-    const [sG, oG] = (await Promise.all([loadTeamGames(league, SAIPA_NUM), loadTeamGames(league, oppId)])).map(gs => gs.filter(x => x.start < next.start));
-    pregameData = { id: next.id, sG, oG, sSum: teamSummary(sG) };
+    const [sG, oG] = (await Promise.all([loadTeamGames(league, F), loadTeamGames(league, oppId)])).map(gs => gs.filter(x => x.start < next.start));
+    pregameData = { id: next.id, F, sG, oG, sSum: teamSummary(sG) };
   }
   const { sG, oG, sSum } = pregameData;
-  const L = await loadLineups(next, g, sG, oG, homeId).catch(() => null);
+  const L = await loadLineups(next, g, sG, oG, homeId, F).catch(() => null);
   const hn = G.homeTeam.teamName, an = G.awayTeam.teamName, start = new Date(G.start || next.start).getTime();
   const sideH = home ? L?.sai : L?.opp, sideA = home ? L?.opp : L?.sai;
   const gk = side => side?.cur?.goalies?.[0] ? side.cur.goalies[0].lastName : null;
@@ -331,7 +337,7 @@ async function pregameHtml(next, g, pre, home) {
   if (pre) {
     const wp = liveWinProb(pre, { h: 0, a: 0 }, 0, home), top = pre.top?.[0];
     tiles.push(tile('📊', 'Voitto\u00adtodennäköisyys', pct(wp, 0), '', null, `tasapeli 60 min jälkeen ${pct(pre.T, 0)}`, '',
-      `SaiPan voittotodennäköisyys ennen ottelua\n${hn}\t${pct(pre.H, 0)}\nTasapeli 60 min\t${pct(pre.T, 0)}\n${an}\t${pct(pre.A, 0)}`));
+      `${LV.gen} voittotodennäköisyys ennen ottelua\n${hn}\t${pct(pre.H, 0)}\nTasapeli 60 min\t${pct(pre.T, 0)}\n${an}\t${pct(pre.A, 0)}`));
     tiles.push(tile('🎯', 'Maaliennuste', `${num(pre.lh, 1)}–${num(pre.la, 1)}`, '', null, top ? `todennäköisin tulos ${top.i}–${top.j}` : '', '', `Odotetut maalit\n${hn}–${an}`));
   } else {
     tiles.push(tile('📊', 'Voitto\u00adtodennäköisyys', '–', '', null, 'ei ennustetta'), tile('🎯', 'Maaliennuste', '–', '', null, 'ei ennustetta'));
@@ -339,7 +345,7 @@ async function pregameHtml(next, g, pre, home) {
   tiles.push(tile('🧤', 'Aloittavat maalivahdit', gk(sideH) || gk(sideA) ? `${esc(gk(sideH) || '?')} – ${esc(gk(sideA) || '?')}` : '–', '', null,
     gk(sideH) || gk(sideA) ? 'kokoonpanojen mukaan' : 'kokoonpanot julkaistaan ottelupäivänä'));
   const S = L?.sai, changes = S?.cur && S?.prev ? { inn: S.cur.all.filter(p => !S.prev.ids.has(p.id)), out: S.prev.all.filter(p => !S.cur.ids.has(p.id)) } : null;
-  tiles.push(tile('📋', 'SaiPan kokoonpano', S?.cur ? '✓' : '…', '', null,
+  tiles.push(tile('📋', `${LV.gen} kokoonpano`, S?.cur ? '✓' : '…', '', null,
     (S?.cur ? (changes ? 'Vahvistettu · ' : 'Vahvistettu') : 'Ei vielä julkaistu · ') + (!changes && S?.cur ? '' : changes ? (changes.inn.length || changes.out.length ? `${changes.inn.length ? `sisään ${changes.inn.map(p => esc(p.lastName)).join(', ')}` : ''}${changes.inn.length && changes.out.length ? ' · ' : ''}${changes.out.length ? `ulos ${changes.out.map(p => esc(p.lastName)).join(', ')}` : ''}` : 'sama kuin viime ottelussa') : 'päivittyy itsestään'), S?.cur ? 'pos' : ''));
   const avail = S?.cur ? new Set(S.cur.all.map(p => p.id)) : S?.prev ? new Set(S.prev.all.map(p => p.id)) : null;
   const hot = keyPicks(sSum, avail).find(x => x.p && x.cls === 'hot') || keyPicks(sSum, avail).find(x => x.p);
@@ -353,10 +359,13 @@ async function pregameHtml(next, g, pre, home) {
 }
 
 async function renderLive(id, box) {
+  liveBox = box;
   clearTimeout(liveTimer); clearInterval(liveTick); liveClock = null; liveLog = [];
   liveSeen = new Set(); liveFirstT = new Map();
   box.innerHTML = '<p class="loading">Haetaan live-dataa…</p>';
-  const next = LIVE_REPLAY ? (await getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)).find(g => String(g.id) === String(id)) : nextGameRow;
+  const next = !LIVE_REPLAY && nextGameRow && String(nextGameRow.id) === String(id) ? nextGameRow
+    : (await getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)).find(g => String(g.id) === String(id));
+  if (!next) { box.innerHTML = '<p class="muted">Ottelua ei löytynyt.</p>'; return; }
   const pre = await loadForecast(next, next.start).then(F => F?.p).catch(() => null);
   const teams = new Map([[teamNum(next.homeTeamId), next.homeTeamName], [teamNum(next.awayTeamId), next.awayTeamName]]);
   let pvt = null, first = true;
@@ -367,7 +376,8 @@ async function renderLive(id, box) {
       const s = box.querySelector('.lv-stamp'); if (s) s.textContent = `päivitys epäonnistui (${e.message}), yritetään uudelleen`;
       return;
     }
-    const G = g.game, home = isSaipa(G.homeTeam.teamId);
+    const G = g.game, home = teamNum(G.homeTeam.teamId) === focusNum(g);
+    lvSet(g);
     // Keep the page footer's timestamp in step with the live refresh
     { const u = document.getElementById('updated'); if (u) u.textContent = 'Päivitetty ' + new Date().toLocaleString('fi-FI', { dateStyle: 'short', timeStyle: 'medium' }); }
     if (!G.started) {
@@ -421,7 +431,7 @@ async function renderLive(id, box) {
       const mineDown = pk.length > pp.length, arr = mineDown ? pk : pp, end = Math.max(...arr.map(p => p.end)), start = Math.min(...arr.map(p => p.t));
       const us = Math.max(3, 5 - pk.length), them = Math.max(3, 5 - pp.length);
       const who = arr.map(p => `${p.player}${p.name ? `, ${p.name}` : ''} ${p.min} min`).join('\n');
-      nowItems.push(`<div class="lv-now-i ${mineDown ? 'neg' : 'pos'}" data-tip="${esc(`${mineDown ? 'Jäähyllä (SaiPa)' : `Jäähyllä (${O.teamName})`}\n${who}`)}"><b>${mineDown ? 'Alivoima' : 'Ylivoima'}</b><span>SaiPa ${us} v ${them}</span><span class="lv-cd" data-cd="${end}">${left(arr)} jäljellä</span><i data-bar="${start},${end}" style="width:${Math.max(0, Math.min(100, (end - t) / Math.max(1, end - start) * 100))}%"></i></div>`);
+      nowItems.push(`<div class="lv-now-i ${mineDown ? 'neg' : 'pos'}" data-tip="${esc(`${mineDown ? `Jäähyllä (${LV.fn})` : `Jäähyllä (${O.teamName})`}\n${who}`)}"><b>${mineDown ? 'Alivoima' : 'Ylivoima'}</b><span>${esc(LV.fn)} ${us} v ${them}</span><span class="lv-cd" data-cd="${end}">${left(arr)} jäljellä</span><i data-bar="${start},${end}" style="width:${Math.max(0, Math.min(100, (end - t) / Math.max(1, end - start) * 100))}%"></i></div>`);
     }
     if (intermission) { const be = liveBreak?.end;
       nowItems.push(`<div class="lv-now-i mid" data-tip="${esc(be ? `Erätauko ${breakLen(G.start) / 60} min (${breakLen(G.start) === 1200 ? 'viikonloppu' : 'arkipäivä'})\nTauko alkoi noin klo ${new Date(liveBreak.start).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}\nArvio: ${t / 1200 + 1}. erä alkaa klo ${new Date(be).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}` : 'Tauon alkuhetki ei ole tiedossa, koska sivu avattiin kesken tauon')}"><b>Erätauko</b><span>${t / 1200}. erä päättyi</span>${be ? `<span class="lv-cd" data-wcd="${be}">${mmss(Math.max(0, Math.ceil((be - Date.now()) / 1000)))} jäljellä</span>` : ''}${be ? `<i data-wbar="${liveBreak.start},${be}" style="width:${Math.max(0, Math.min(100, (be - Date.now()) / (be - liveBreak.start) * 100))}%"></i>` : ''}</div>`); }
@@ -431,9 +441,9 @@ async function renderLive(id, box) {
     { const sh = d.shots.filter(x => x.t <= t).sort((a, b) => a.t - b.t); let n = 0, who = null, t0 = 0;
       for (const x of sh) { if (x.mine === who) n++; else { who = x.mine; n = 1; t0 = x.t; } }
       const lastShot = sh[sh.length - 1];
-      if (n >= 5 && lastShot && t - lastShot.t <= 90 && !intermission) nowItems.push(`<div class="lv-now-i ${who ? 'pos' : 'neg'}" data-tip="${esc(`Vastaamattomat laukausyritykset\n${who ? 'SaiPa' : O.teamName} ${n}, ${who ? O.teamName : 'SaiPa'} 0\nAlkoi\t${ptime(t0)}`)}"><b>🌊 ${who ? 'SaiPa' : esc(O.teamName)} ${n}–0</b><span>laukausyritykset putkeen</span><span class="lv-cd">${mmss(t - t0)}</span></div>`); }
+      if (n >= 5 && lastShot && t - lastShot.t <= 90 && !intermission) nowItems.push(`<div class="lv-now-i ${who ? 'pos' : 'neg'}" data-tip="${esc(`Vastaamattomat laukausyritykset\n${who ? LV.fn : O.teamName} ${n}, ${who ? O.teamName : LV.fn} 0\nAlkoi\t${ptime(t0)}`)}"><b>🌊 ${who ? esc(LV.fn) : esc(O.teamName)} ${n}–0</b><span>laukausyritykset putkeen</span><span class="lv-cd">${mmss(t - t0)}</span></div>`); }
     { const lastMine = d.shots.filter(x => x.mine && x.t <= t).pop(), dry = t - (lastMine?.t || 0);
-      if (!G.ended && !intermission && t > 600 && dry >= 300) nowItems.push(`<div class="lv-now-i neg"><b>Kuiva kausi</b><span>SaiPalta ei laukausyritystä</span><span class="lv-cd">${Math.floor(dry / 60)} min</span></div>`); }
+      if (!G.ended && !intermission && t > 600 && dry >= 300) nowItems.push(`<div class="lv-now-i neg"><b>Kuiva kausi</b><span>${LV.neutral ? `${esc(LV.fn)}: ei laukausyritystä` : 'SaiPalta ei laukausyritystä'}</span><span class="lv-cd">${Math.floor(dry / 60)} min</span></div>`); }
     // Always rendered (empty when nothing is on) so the sticky header keeps one height and the page does not jump
     const nowItemsHtml = nowItems.join('');
     const full = analyzeGame(g, st, null, ctx);
@@ -445,13 +455,13 @@ async function renderLive(id, box) {
     // The five permanent tiles: always present (a dash when data is missing), so the grid never changes shape
     const tiles = [
       wp != null ? tile('📊', 'Voitto\u00adtodennäköisyys', pct(wp, 0), '', null, `ennen ottelua ${pct(wp0, 0)}`, wp >= wp0 ? 'pos' : 'neg',
-        'SaiPan voittotodennäköisyys nyt\nTilanne, ennakkoarvio, tämän ottelun maalipaikat ja lopun tyhjä maali\nTasapeli 60 minuutin jälkeen = puolikas voitto')
+        `${LV.gen} voittotodennäköisyys nyt\nTilanne, ennakkoarvio, tämän ottelun maalipaikat ja lopun tyhjä maali\nTasapeli 60 minuutin jälkeen = puolikas voitto`)
         : tile('📊', 'Voitto\u00adtodennäköisyys', G.ended ? (sf > sa ? 'Voitto' : sf < sa ? 'Tappio' : '–') : '–', '', null, G.ended ? 'ottelu päättyi' : 'ei ennustetta'),
-      tile('🎯', 'Maalipaikat', xgf != null ? `${num(home ? xgf : xga, 1)}–${num(home ? xga : xgf, 1)}` : '–', xgf != null ? 'xG' : '', null, xgf != null ? `${pre ? `ennuste ${num(pre.lh, 1)}–${num(pre.la, 1)} · ` : ''}SaiPa ${signed(sf - xgf, 1)} G−xG` : 'ei dataa', '',
-        `Expected Goals\nMaaliodottama: kuinka monta maalia laukaisupaikoista tulisi keskimäärin, ${hn}–${an}\nG−xG: SaiPan maalit miinus maaliodottama. Plus = maaleja enemmän kuin paikat antaisivat odottaa.`),
-      `<div class="tile ${rm > ro + 2 ? 'pos' : ro > rm + 2 ? 'neg' : ''}" data-tip="${esc(`Corsi For\nLaukausyritykset viimeisen 5 minuutin aikana, ${hn}–${an}\nMukana maalia kohti, ohi ja blokatut laukaukset\nPalkki = minuutti kerrallaan, korkeus = yritysten määrä`)}"><div class="t-top"><span class="t-ic">🌊</span><span class="k">Painostus, 5 min</span></div><div class="v">${home ? rm : ro}–${home ? ro : rm}<small>CF</small></div><div class="lv-bars">${bars}</div><div class="t-sub">laukausyritykset · ${rm > ro + 2 ? 'SaiPa painostaa' : ro > rm + 2 ? `${esc(oppName)} painostaa` : 'tasaista'}</div></div>`,
-      star ? tile('⭐', 'SaiPan paras nyt', num(star.gs, 2), 'GS', star, `${star.g}+${star.a} · ${star.shots} laukausyritystä · ${mmss(star.toi)}`, '',
-        `Game Score\nPelipisteet: maalit, syötöt, laukaukset, kentällä-tilastot ja muut yhteen painotettuna\nMaalit + syötöt\t${star.g}+${star.a}\nLaukausyritykset\t${star.shots}\nPeliaika\t${mmss(star.toi)}`) : tile('⭐', 'SaiPan paras nyt', '–', '', null, 'pelaajatilastot päivittyvät'),
+      tile('🎯', 'Maalipaikat', xgf != null ? `${num(home ? xgf : xga, 1)}–${num(home ? xga : xgf, 1)}` : '–', xgf != null ? 'xG' : '', null, xgf != null ? `${pre ? `ennuste ${num(pre.lh, 1)}–${num(pre.la, 1)} · ` : ''}${esc(LV.fn)} ${signed(sf - xgf, 1)} G−xG` : 'ei dataa', '',
+        `Expected Goals\nMaaliodottama: kuinka monta maalia laukaisupaikoista tulisi keskimäärin, ${hn}–${an}\nG−xG: ${LV.gen} maalit miinus maaliodottama. Plus = maaleja enemmän kuin paikat antaisivat odottaa.`),
+      `<div class="tile ${rm > ro + 2 ? 'pos' : ro > rm + 2 ? 'neg' : ''}" data-tip="${esc(`Corsi For\nLaukausyritykset viimeisen 5 minuutin aikana, ${hn}–${an}\nMukana maalia kohti, ohi ja blokatut laukaukset\nPalkki = minuutti kerrallaan, korkeus = yritysten määrä`)}"><div class="t-top"><span class="t-ic">🌊</span><span class="k">Painostus, 5 min</span></div><div class="v">${home ? rm : ro}–${home ? ro : rm}<small>CF</small></div><div class="lv-bars">${bars}</div><div class="t-sub">laukausyritykset · ${rm > ro + 2 ? `${esc(LV.fn)} painostaa` : ro > rm + 2 ? `${esc(oppName)} painostaa` : 'tasaista'}</div></div>`,
+      star ? tile('⭐', `${LV.gen} paras nyt`, num(star.gs, 2), 'GS', star, `${star.g}+${star.a} · ${star.shots} laukausyritystä · ${mmss(star.toi)}`, '',
+        `Game Score\nPelipisteet: maalit, syötöt, laukaukset, kentällä-tilastot ja muut yhteen painotettuna\nMaalit + syötöt\t${star.g}+${star.a}\nLaukausyritykset\t${star.shots}\nPeliaika\t${mmss(star.toi)}`) : tile('⭐', `${LV.gen} paras nyt`, '–', '', null, 'pelaajatilastot päivittyvät'),
       gk ? tile('🧤', 'Maalivahti', signed(gk.gsax, 2), 'GSAx', gk, `${gk.saves} torjuntaa · ${gk.ga} päästettyä`, gk.gsax >= 0 ? 'pos' : 'neg',
         'Goals Saved Above Expected\nPlus = torjunut enemmän kuin laukaisupaikat antaisivat odottaa') : tile('🧤', 'Maalivahti', '–', '', null, 'pelaajatilastot päivittyvät'),
     ];
@@ -460,7 +470,7 @@ async function renderLive(id, box) {
     for (const a of alerts) { if (!liveFirstT.has(a.key)) liveFirstT.set(a.key, a.t); a.t = liveFirstT.get(a.key); }
     alerts.sort((a, b) => b.t - a.t);
     const fresh = alerts.filter(a => !liveSeen.has(a.key));
-    if (!first && liveNotify) for (const a of fresh.slice(0, 3)) try { new Notification('SaiPa live', { body: a.txt.replace(/&[a-z#0-9]+;/g, ''), tag: a.key }); } catch (e) { /* not available */ }
+    if (!first && liveNotify) for (const a of fresh.slice(0, 3)) try { new Notification(`${hn}–${an}`, { body: a.txt.replace(/&[a-z#0-9]+;/g, ''), tag: a.key }); } catch (e) { /* not available */ }
     alerts.forEach(a => liveSeen.add(a.key));
     // Header strip: what is on right now, plus a button that opens the full event history (newest first)
     if (liveFeedOpen) liveFeedSeen = alerts.length;
@@ -472,18 +482,21 @@ async function renderLive(id, box) {
     if (!pvt) pvt = await previewVsTonight(next, g, st).catch(() => null);
     else for (const r of pvt) r.tonight = new Map(teamGame(g, st, r.tid, next).players.map(p => [p.id, p]));
     const clock = G.ended ? 'Päättynyt' : intermission ? `Erätauko ${t / 1200}.–${t / 1200 + 1}.` : per > 3 ? `<span data-clk="3600" data-pre="Jatkoaika ">Jatkoaika ${mmss(t - 3600)}</span>` : `<span data-clk="${(per - 1) * 1200}" data-pre="${per}. erä ">${per}. erä ${mmss(t - (per - 1) * 1200)}</span>`;
+    // Other teams' games: the viewer picks whose point of view the tiles, alerts and report use
+    const persp = LV.neutral ? `<div class="lv-persp seg" data-tip="Näkökulma: kenen voittotodennäköisyys, paras pelaaja, maalivahti, peliajat ja raportin pelaajatilastot näytetään">${[G.homeTeam, G.awayTeam].map(x => `<button data-f="${teamNum(x.teamId)}" class="${teamNum(x.teamId) === focusNum(g) ? 'on' : ''}">${esc(x.teamName)}</button>`).join('')}</div>` : '';
     const gaps = liveLog.slice(1).map((w, i) => Math.round((w - liveLog[i]) / 1000));
     const stampTip = `Haku ${liveNextMs / 1000} s välein\nKello liikkui viime välillä\t${pct(liveClock.rate, 0)} reaaliajasta${gaps.length ? `\nData muuttui (s välein)\t${gaps.slice(-8).join(', ')}` : ''}`;
     box.innerHTML = `<div class="lv-panel">
-      <div class="lv-head">${G.ended ? '' : '<span class="lv-dot"></span>'}<b>${esc(G.homeTeam.teamName)} ${score.h}–${score.a} ${esc(G.awayTeam.teamName)}</b><span>${clock}</span><span class="lv-stamp" data-tip="${esc(stampTip)}">päivitetty ${new Date().toLocaleTimeString('fi-FI')}</span>${nowStrip}</div>
+      <div class="lv-head">${G.ended ? '' : '<span class="lv-dot"></span>'}<b>${esc(G.homeTeam.teamName)} ${score.h}–${score.a} ${esc(G.awayTeam.teamName)}</b><span>${clock}</span><span class="lv-stamp" data-tip="${esc(stampTip)}">päivitetty ${new Date().toLocaleTimeString('fi-FI')}</span>${persp}${nowStrip}</div>
       <div class="tiles lv-tiles">${tiles.join('')}</div>
       ${periodBreakHtml(g, st, ctx, t, home, intermission, d)}
       ${wpChart(pre, d, t, home, xgNow, en)}
       ${pvt ? pvtHtml(pvt, teams) : ''}
       ${iceHtml(full, d, g, per)}
-      ${G.ended ? '<p class="muted small">Ottelu on päättynyt. Lataa sivu uudelleen, niin raportti avautuu Ottelu-välilehdelle.</p>' : ''}
+      ${G.ended && !LV.neutral ? '<p class="muted small">Ottelu on päättynyt. Lataa sivu uudelleen, niin raportti avautuu Ottelu-välilehdelle.</p>' : ''}
     </div><div id="liveReport"></div>`;
     const nb = box.querySelector('.lv-nb'); if (nb) nb.onclick = () => liveToggleNotify(nb);
+    box.querySelectorAll('.lv-persp button').forEach(b => b.onclick = e => { e.stopPropagation(); FOCUS_PICK.set(String(id), Number(b.dataset.f)); first = true; liveSeen = new Set(); liveFirstT = new Map(); draw(); });
     const hb = box.querySelector('.lv-hist'), popEl = box.querySelector('.lv-pop');
     if (hb && popEl) hb.onclick = e => { e.stopPropagation(); liveFeedOpen = popEl.hidden; popEl.hidden = !liveFeedOpen; hb.classList.toggle('on', liveFeedOpen); hb.setAttribute('aria-expanded', liveFeedOpen);
       if (liveFeedOpen) { liveFeedSeen = alerts.length; hb.querySelector('.dot')?.remove(); } };
@@ -504,6 +517,79 @@ async function renderLive(id, box) {
   if (LIVE_REPLAY) return;
   liveTick = setInterval(() => { if (!document.hidden) liveTickDraw(box); }, 1000);
   // Poll with setTimeout so the interval can change (intermission) and requests never overlap
-  const loop = async () => { if (!liveNextMs || !box.isConnected) return; if (!document.hidden) await draw(); if (liveNextMs) liveTimer = setTimeout(loop, liveNextMs); };
+  const loop = async () => { if (!liveNextMs || !box.isConnected) return; if (!document.hidden && lvShown(box)) await draw(); if (liveNextMs) liveTimer = setTimeout(loop, liveNextMs); };
   liveTimer = setTimeout(loop, liveNextMs);
+}
+
+/* ---------- LV-2: live page for every Liiga game ----------
+ * Always in the top menu. Lists the day's games (or the next game day's) with score and clock from the schedule,
+ * refreshed once a minute. A game opens from 10 minutes before puck drop; SaiPa's games open in the game view's
+ * own Live tab. Only the game on screen is polled, and nothing is polled while another view is shown. */
+let liveBox = null, liveHubTimer = null, LIVE_SEL = null;
+const liveSelected = () => LIVE_SEL;   // keeps the chosen game in the address when coming back to the view
+const liveOpenAt = g => new Date(g.start).getTime() - 10 * 60000;
+const liveIsOpen = g => g.started || g.ended || Date.now() >= liveOpenAt(g);
+const helDay = t => new Date(t).toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
+const helHm = t => new Date(t).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Helsinki' });
+async function liveHubGames() {
+  const sched = await fetch(`${API}/schedule?tournament=${TOURNAMENT}&season=${SEASON}`, { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  const today = helDay(Date.now());
+  let day = sched.filter(g => helDay(g.start) === today), label = 'Tänään';
+  if (!day.length) {
+    const nx = sched.filter(g => !g.ended && new Date(g.start).getTime() > Date.now()).sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (nx) {
+      const d = helDay(nx.start);
+      day = sched.filter(g => helDay(g.start) === d);
+      label = `Seuraavat ottelut ${new Date(nx.start).toLocaleDateString('fi-FI', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'Europe/Helsinki' })}`;
+    }
+  }
+  return { day: day.sort((a, b) => a.start.localeCompare(b.start) || a.homeTeamName.localeCompare(b.homeTeamName)), label };
+}
+function liveHubHtml(H, sel) {
+  if (!H.day.length) return '<p class="muted">Ei tulevia otteluita otteluohjelmassa.</p>';
+  const chip = g => {
+    const sai = teamNum(g.homeTeamId) === SAIPA_NUM || teamNum(g.awayTeamId) === SAIPA_NUM, open = liveIsOpen(g);
+    const per = g.gameTime > 3600 ? 'JA' : `${Math.min(3, Math.floor((g.gameTime || 0) / 1200) + 1)}. erä`;
+    const status = g.ended ? `Päättynyt${g.finishedType === 'ENDED_DURING_EXTENDED_GAME_TIME' ? ' JA' : g.finishedType === 'ENDED_DURING_WINNING_SHOT_COMPETITION' ? ' VL' : ''}`
+      : g.started ? `<span class="lv-dot"></span>${per}` : `klo ${helHm(g.start)}`;
+    const score = g.started || g.ended ? `<b>${g.homeTeamGoals ?? 0}–${g.awayTeamGoals ?? 0}</b>` : '<b>–</b>';
+    const body = `<span class="lh-s">${status}</span><span class="lh-t">${esc(g.homeTeamName)}</span>${score}<span class="lh-t">${esc(g.awayTeamName)}</span>`;
+    const tip = open ? (sai ? 'Avautuu ottelunäkymän Live-välilehdelle' : 'Avaa live') : `Live avautuu klo ${helHm(liveOpenAt(g))}, 10 min ennen aloitusta`;
+    if (!open) return `<span class="lh-g off" data-tip="${esc(tip)}">${body}</span>`;
+    const href = sai ? `?game=${g.id}&tab=live` : `?view=live&id=${g.id}`;
+    return `<a class="lh-g${String(g.id) === String(sel) ? ' on' : ''}${sai ? ' sai' : ''}" href="${href}" data-id="${sai ? '' : g.id}" data-tip="${esc(tip)}">${body}</a>`;
+  };
+  return `<div class="lh-h"><b>${H.label}</b><span class="muted small">päivittyy minuutin välein</span></div><div class="lh-list">${H.day.map(chip).join('')}</div>`;
+}
+function liveHubPick(id, push) {
+  LIVE_SEL = id || null;
+  setUrl(id ? `?view=live&id=${id}` : '?view=live', push);
+  const gbox = $('#liveGame');
+  document.querySelectorAll('#liveHub .lh-g').forEach(a => a.classList.toggle('on', a.dataset.id === String(id)));
+  if (!gbox) return;
+  if (!id) { gbox.innerHTML = '<p class="muted lh-empty">Valitse ottelu yltä. Ottelu avautuu 10 minuuttia ennen aloitusta.</p>'; return; }
+  liveBox = gbox; renderLive(id, gbox);
+}
+async function renderLiveHub() {
+  const hub = $('#liveHub');
+  if (!hub) return;
+  let H = null;
+  const draw = async () => {
+    try { H = await liveHubGames(); } catch (e) { hub.innerHTML = `<p class="neg-num">Otteluohjelman haku epäonnistui (${esc(e.message)}).</p>`; return; }
+    hub.innerHTML = liveHubHtml(H, urlState().id);
+    hub.querySelectorAll('a.lh-g[data-id]').forEach(a => { if (a.dataset.id) a.onclick = e => { e.preventDefault(); liveHubPick(a.dataset.id, true); }; });
+  };
+  await draw();
+  clearInterval(liveHubTimer);
+  liveHubTimer = setInterval(() => { if (!document.hidden && lvShown(hub)) draw(); }, 60000);
+  const id = urlState().id || LIVE_SEL, gbox = $('#liveGame');
+  const g = id && H ? H.day.find(x => String(x.id) === String(id)) : null;
+  if (id && liveBox === gbox && gbox.children.length) return;   // already running here
+  if (id && g && teamNum(g.homeTeamId) !== SAIPA_NUM && teamNum(g.awayTeamId) !== SAIPA_NUM && !liveIsOpen(g)) { gbox.innerHTML = `<p class="muted lh-empty">Live avautuu klo ${helHm(liveOpenAt(g))}.</p>`; return; }
+  liveHubPick(id || null, false);
+}
+// Called by app.js when a view is shown: the live view that was replaced by the other one starts again
+function liveResume(view) {
+  if (view === 'live') { renderLiveHub(); return; }
+  if (view === 'ottelu') { const hb = $('#hubBody'); if (hb && liveBox && liveBox !== hb && document.querySelector('.stab[data-s="live"].active')) { liveBox = hb; renderLive(urlState().game, hb); } }
 }

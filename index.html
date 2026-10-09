@@ -27,6 +27,7 @@
   <div class="brand">SaiPa-data</div>
   <nav class="tabs" role="tablist">
     <button class="tab active" data-view="ottelu">Ottelu</button>
+    <button class="tab tab-live" data-view="live"><span class="lv-dot"></span>Live</button>
     <button class="tab" data-view="kausi">Kausi</button>
     <button class="tab" data-view="historia">Historia</button>
     <button class="tab" data-view="info">Mittarit</button>
@@ -40,6 +41,11 @@
       <select id="gameSelect"></select>
     </div>
     <div id="gameContent"><p class="loading">Ladataan otteluita…</p></div>
+  </section>
+
+  <section id="view-live" class="view">
+    <div id="liveHub" class="card lh"><p class="loading">Haetaan otteluohjelmaa…</p></div>
+    <div id="liveGame"></div>
   </section>
 
   <section id="view-kausi" class="view">

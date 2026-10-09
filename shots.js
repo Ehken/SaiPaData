@@ -92,15 +92,16 @@ const mapLegend = (fixed = false) => `<div class="sm-legend"><span><i class="lg-
 // SaiPa attacks the right net and the opponent the left net, for the whole game.
 function shotMapCard(sm, g, oppName) {
   if (!sm || !sm.length) return '';
+  const fn = esc(focusName(g));
   return `<div class="card" id="shotCard">
     <h2>Laukauskartta</h2>
     <div class="sm-filters">
-      <div class="seg" data-f="team"><button data-v="all" class="on">Molemmat</button><button data-v="sai">SaiPa</button><button data-v="opp">${esc(oppName)}</button></div>
+      <div class="seg" data-f="team"><button data-v="all" class="on">Molemmat</button><button data-v="sai">${fn}</button><button data-v="opp">${esc(oppName)}</button></div>
       <div class="seg" data-f="situ"><button data-v="all" class="on">Kaikki</button><button data-v="TV">Tasakentällisin</button><button data-v="YV">Ylivoima</button><button data-v="AV">Alivoima</button></div>
       <div class="seg" data-f="kind"><button data-v="all" class="on">Kaikki yritykset</button><button data-v="sog">Maalia kohti</button></div>
       <select class="sm-player"><option value="">Kaikki pelaajat</option></select>
     </div>
-    <div class="sm-dir"><span><i class="dot opp"></i>← ${esc(oppName)} hyökkää</span><span>SaiPa hyökkää →<i class="dot sai"></i></span></div>
+    <div class="sm-dir"><span><i class="dot opp"></i>← ${esc(oppName)} hyökkää</span><span>${fn} hyökkää →<i class="dot sai"></i></span></div>
     <svg viewBox="0 0 1000 510" class="rink" id="shotSvg"></svg>
     ${mapLegend(sm.some(x => x.eventType === 'GOAL' && x.mapShooterId))}
     <div class="sm-sum" id="shotSum"></div>
@@ -111,9 +112,10 @@ function initShotMap(box, sm, g, oppName) {
   const card = box.querySelector('#shotCard');
   if (!card) return () => {};
   const names = new Map([...(g.homeTeamPlayers || []), ...(g.awayTeamPlayers || [])].map(p => [p.id, `${p.firstName} ${p.lastName}`]));
+  const F = focusNum(g), fn = esc(focusName(g));
   const shots = sm.map(s => {
-    const n = normShot(s), mine = s.shootingTeamId === SAIPA_NUM;
-    // SaiPa shoots at the right net, the opponent at the left net (rotate back).
+    const n = normShot(s), mine = s.shootingTeamId === F;
+    // The focus team (SaiPa, or the home team in other games) shoots at the right net, the opponent at the left net (rotate back).
     return { ...n, mine, x: mine ? n.x : RINK.w - n.x, y: mine ? n.y : RINK.h - n.y, label: names.get(s.shooterId) || '' };
   });
   const st = { team: 'all', situ: 'all', kind: 'all', player: '', period: null };
@@ -121,7 +123,7 @@ function initShotMap(box, sm, g, oppName) {
   const players = [...new Set(shots.map(s => s.shooterId))].filter(id => names.has(id))
     .map(id => ({ id, n: names.get(id), mine: shots.find(s => s.shooterId === id).mine, c: shots.filter(s => s.shooterId === id).length }))
     .sort((a, b) => (b.mine - a.mine) || b.c - a.c);
-  sel.innerHTML += `<optgroup label="SaiPa">${players.filter(p => p.mine).map(p => `<option value="${p.id}">${esc(p.n)} (${p.c})</option>`).join('')}</optgroup>
+  sel.innerHTML += `<optgroup label="${fn}">${players.filter(p => p.mine).map(p => `<option value="${p.id}">${esc(p.n)} (${p.c})</option>`).join('')}</optgroup>
     <optgroup label="${esc(oppName)}">${players.filter(p => !p.mine).map(p => `<option value="${p.id}">${esc(p.n)} (${p.c})</option>`).join('')}</optgroup>`;
   const draw = () => {
     const f = shots.filter(s => (st.team === 'all' || (st.team === 'sai') === s.mine)
@@ -133,7 +135,7 @@ function initShotMap(box, sm, g, oppName) {
       const a = f.filter(s => s.mine === side);
       return `<b>${a.length}</b> yritystä · <b>${a.filter(s => s.sog).length}</b> maalia kohti · <b>${a.filter(s => s.goal).length}</b> maalia · maalin edestä <b>${a.filter(s => s.zone === 'slot').length}</b>`;
     };
-    card.querySelector('#shotSum').innerHTML = `<div><span class="dot sai"></span>SaiPa: ${sum(true)}</div><div><span class="dot opp"></span>${esc(oppName)}: ${sum(false)}</div>
+    card.querySelector('#shotSum').innerHTML = `<div><span class="dot sai"></span>${fn}: ${sum(true)}</div><div><span class="dot opp"></span>${esc(oppName)}: ${sum(false)}</div>
       ${st.period != null ? `<div class="muted small">Näytetään ${PERIOD_LABEL(st.period).toLowerCase()} (valittu eräpainikkeista).</div>` : ''}`;
   };
   card.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.onclick = () => {

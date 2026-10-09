@@ -353,7 +353,7 @@ async function renderPreview(id, box) {
     }).catch(e => { const card = box.querySelector('#fcCard'); if (card) card.innerHTML = `<h2>Ennuste</h2><p class="neg-num">Ennusteen laskenta epäonnistui: ${esc(e.message)}</p>`; });
 
     // SM-3: zone profiles from every shot map played before this game
-    loadLeagueShots().then(L => {
+    whenVisible(box.querySelector('#pfCard'), () => loadLeagueShots().then(L => {
       const P = teamShotProfiles(L, next.start);
       const card = box.querySelector('#pfCard');
       if (!card) return;
@@ -362,7 +362,7 @@ async function renderPreview(id, box) {
       if (!html) card.remove();
       const hl = box.querySelector('.hl-grid');
       if (hl) for (const c of profileHeadlines(P, sai, oppId, opp.name)) hl.insertAdjacentHTML('beforeend', hlCard(c.k, c.v, c.t, c.cls));
-    }).catch(e => { const card = box.querySelector('#pfCard'); if (card) card.innerHTML = `<h2>Mistä maalit syntyvät</h2><p class="neg-num">Laukauskarttojen haku epäonnistui: ${esc(e.message)}</p>`; });
+    }).catch(e => { const card = box.querySelector('#pfCard'); if (card) card.innerHTML = `<h2>Mistä maalit syntyvät</h2><p class="neg-num">Laukauskarttojen haku epäonnistui: ${esc(e.message)}</p>`; }));
 
     const currentTeam = new Map([...sSum.players, ...sSum.goalies].map(p => [p.id, SAIPA_NUM]).concat([...oSum.players, ...oSum.goalies].map(p => [p.id, oppId])));
     loadH2H(homeId, awayId, next, currentTeam, live).then(h => {
@@ -690,11 +690,11 @@ function lineupOf(roster) {
   };
 }
 
-async function loadLineups(next, nextGame, sG, oG, homeId) {
+async function loadLineups(next, nextGame, sG, oG, homeId, focus = SAIPA_NUM) {
   const rosterOf = (g, teamId) => g ? (teamNum(g.game.homeTeam.teamId) === teamId ? g.homeTeamPlayers : g.awayTeamPlayers) : null;
   const prevGame = async (games) => { const last = games[games.length - 1]; return last ? { row: last, g: await getJSON(`/games/${SEASON}/${last.id}`).catch(() => null) } : null; };
   const [ps, po] = await Promise.all([prevGame(sG), prevGame(oG)]);
-  const oppId = homeId === SAIPA_NUM ? teamNum(next.awayTeamId) : homeId;
+  const oppId = homeId === focus ? teamNum(next.awayTeamId) : homeId;
   const build = (teamId, prev) => {
     const roster = rosterOf(nextGame, teamId) || [];
     const cur = lineupOf(roster);
@@ -702,7 +702,7 @@ async function loadLineups(next, nextGame, sG, oG, homeId) {
     const flagged = roster.filter(p => p.injured || p.suspended);
     return { cur, prev: prevL, prevRow: prev?.row || null, flagged };
   };
-  return { sai: build(SAIPA_NUM, ps), opp: build(oppId, po) };
+  return { sai: build(focus, ps), opp: build(oppId, po) };
 }
 
 // Lineups as a head-to-head board: each line is one row, SaiPa's players on the left and the opponent's on

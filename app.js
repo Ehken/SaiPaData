@@ -34,12 +34,12 @@ const COMPONENTS = [
 // Address parameters are in English. Old Finnish links (?peli, ?osio, ?nakyma, ?pelaaja) still open.
 const URL_TAB = { ennakko: 'preview', ottelu: 'report', live: 'live', yleis: 'overview', pelaajat: 'players', mv: 'goalies', joukkue: 'team', liiga: 'league' };
 const TAB_FI = Object.fromEntries(Object.entries(URL_TAB).map(([k, v]) => [v, k]));
-const URL_VIEW = { kausi: 'season', historia: 'history', info: 'metrics' };
-const VIEW_FI = { season: 'kausi', history: 'historia', metrics: 'info', kausi: 'kausi', historia: 'historia', mittarit: 'info' };
+const URL_VIEW = { kausi: 'season', historia: 'history', info: 'metrics', live: 'live' };
+const VIEW_FI = { season: 'kausi', history: 'historia', metrics: 'info', kausi: 'kausi', historia: 'historia', mittarit: 'info', live: 'live' };
 function urlState() {
   const q = new URLSearchParams(location.search);
   const tab = q.get('tab') || q.get('osio');
-  return { game: q.get('game') || q.get('peli'), player: q.get('player') || q.get('pelaaja'),
+  return { id: q.get('id'), game: q.get('game') || q.get('peli'), player: q.get('player') || q.get('pelaaja'),
     view: VIEW_FI[q.get('view') || q.get('nakyma')] || 'ottelu', tab: tab ? (TAB_FI[tab] || tab) : null };
 }
 // Position codes in English (NHL style) for the stat tables
@@ -56,6 +56,15 @@ const isSaipa = teamId => String(teamId || '').startsWith(SAIPA);
 const fiDate = iso => new Date(iso).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Helsinki' });
 const cls = n => n > 0.0001 ? 'pos-num' : n < -0.0001 ? 'neg-num' : '';
 
+// Runs fn once, when the first of the elements comes into view (hidden tabs count once they are shown).
+// Heavy league-wide data is fetched only for the cards a viewer actually opens.
+function whenVisible(els, fn) {
+  els = (Array.isArray(els) ? els : [els]).filter(Boolean);
+  if (!els.length) return;
+  if (!('IntersectionObserver' in window)) { fn(); return; }
+  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); fn(); } }, { rootMargin: '300px' });
+  els.forEach(el => io.observe(el));
+}
 const cache = new Map();
 async function getJSON(path) {
   if (!cache.has(path)) {
@@ -205,6 +214,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // Disallowed goals (VT0 = overturned on video review) and shootout goals (period 5) are not game goals.
 const validGoal = e => !(e.goalTypes || []).includes('VT0') && (e.period || 0) <= 4;
 const SAIPA_NUM = Number(SAIPA);
+// Whose point of view a game is analysed from: SaiPa in SaiPa's games, otherwise the home team (live view of
+// other games). Shared by the game report, the live view and the shot map.
+const focusNum = g => {
+  const h = teamNum(g.game.homeTeam.teamId), a = teamNum(g.game.awayTeam.teamId);
+  if (h === SAIPA_NUM || a === SAIPA_NUM) return SAIPA_NUM;
+  const pick = typeof FOCUS_PICK !== 'undefined' ? FOCUS_PICK.get(String(g.game.id)) : null;   // live view's team switch
+  return pick === a ? a : h;
+};
+const focusName = g => teamNum(g.game.homeTeam.teamId) === focusNum(g) ? g.game.homeTeam.teamName : g.game.awayTeam.teamName;
+let GAME_FOCUS = SAIPA_NUM;   // focus team of the game report on screen (set by renderGame)
 const isSog = s => s.eventType === 'GOAL' || s.eventType === 'GOALIE_BLOCKED';
 
 async function loadRaw(id) {
@@ -216,7 +235,7 @@ async function loadRaw(id) {
   const ctx = { sm: Array.isArray(sm) ? sm : [], sogFallback: null };
   if (!ctx.sm.length) {
     // No shot map: take shots on goal (saves + goals) from the players' game logs
-    const side = isSaipa(g.game.homeTeam.teamId) ? 'home' : 'away';
+    const side = teamNum(g.game.homeTeam.teamId) === focusNum(g) ? 'home' : 'away';
     const ids = [...new Set((st[`${side}Team`] || []).flatMap(p => (p.periodPlayerStats || []).map(x => x.playerId)))];
     const logs = await Promise.all(ids.map(pid => getJSON(`/players/info/${pid}/games/${SEASON}`).catch(() => null)));
     ctx.sogFallback = new Map();
@@ -233,8 +252,9 @@ async function loadGame(id) {
   return analyzeGame(g, st, null, ctx);
 }
 
-function analyzeGame(g, st, only = null, ctx = { sm: [], sogFallback: null }) {  // only = period number, or null for the whole game
-  const home = isSaipa(g.game.homeTeam.teamId);
+// only = period number, or null for the whole game; focus = team number to analyse (default: focusNum(g))
+function analyzeGame(g, st, only = null, ctx = { sm: [], sogFallback: null }, focus = null) {
+  const F = focus ?? focusNum(g), home = teamNum(g.game.homeTeam.teamId) === F;
   const side = home ? 'home' : 'away';
   const team = home ? g.game.homeTeam : g.game.awayTeam;
   const opp = home ? g.game.awayTeam : g.game.homeTeam;
@@ -287,20 +307,20 @@ function analyzeGame(g, st, only = null, ctx = { sm: [], sogFallback: null }) { 
   // Shots on goal: from the shot map (goals + saves), or from game logs when the shot map is missing
   const sm = ctx.sm || [];
   const sogBy = {}, missBy = {}, blkdBy = {};
-  for (const x of sm) if (x.shootingTeamId === SAIPA_NUM && (only == null || x.period === only)) {
+  for (const x of sm) if (x.shootingTeamId === F && (only == null || x.period === only)) {
     if (x.eventType === 'MISSED' || x.eventType === 'MISS') missBy[x.shooterId] = (missBy[x.shooterId] || 0) + 1;
     if (x.eventType === 'PLAYER_BLOCKED') blkdBy[x.shooterId] = (blkdBy[x.shooterId] || 0) + 1;
   }
   let sogKnown = true;
   if (sm.length) {
-    for (const x of sm) if (x.shootingTeamId === SAIPA_NUM && isSog(x) && (only == null || x.period === only)) sogBy[x.shooterId] = (sogBy[x.shooterId] || 0) + 1;
+    for (const x of sm) if (x.shootingTeamId === F && isSog(x) && (only == null || x.period === only)) sogBy[x.shooterId] = (sogBy[x.shooterId] || 0) + 1;
   } else if (only == null && ctx.sogFallback) {
     for (const [k, v] of ctx.sogFallback) sogBy[k] = v;
   } else sogKnown = false;
 
   // Corsi coverage check: league-recorded attempts vs. even-strength attempts in the shot map
   const cfCredits = (st[`${side}Team`] || []).reduce((acc, per) => acc + (per.periodPlayerStats || []).reduce((a, x) => a + (x.period?.corsiFor || 0), 0), 0);
-  const smEv = sm.filter(x => x.shootingTeamId === SAIPA_NUM && x.type === 'EvenStrengthShot').length;
+  const smEv = sm.filter(x => x.shootingTeamId === F && x.type === 'EvenStrengthShot').length;
   const corsiOk = !sm.length || smEv < 10 || cfCredits / 5 >= 0.6 * smEv;
 
   const people = [];
@@ -360,7 +380,7 @@ function analyzeGame(g, st, only = null, ctx = { sm: [], sogFallback: null }) { 
   return {
     lineup,
     quality: { sogKnown, sogSource: sm.length ? 'shotmap' : (ctx.sogFallback ? 'log' : 'none'), corsiOk, shotmapMissing: !sm.length },
-    id: g.game.id, start: g.game.start, home, ended: g.game.ended,
+    id: g.game.id, start: g.game.start, home, ended: g.game.ended, focus: F,
     saipa: team, opp, people,
     goalies: goalies.sort((a, b) => a.mvNo - b.mvNo),
     teamXg: team.expectedGoals, oppXg: opp.expectedGoals,
@@ -479,6 +499,7 @@ async function renderGame(id, box = $('#gameContent')) {
     const rd = reportData(g, st, ctx.sm);
     const home = full.home;
     PV_SWAP = !home;
+    GAME_FOCUS = full.focus;
     GAME_SM = ctx.sm || [];   // shared head-to-head helpers (preview.js): home team on the left
     const periods = playedPeriods(st, home ? 'home' : 'away');
     const summary = periodSummary(g, st, home);
@@ -492,9 +513,9 @@ async function renderGame(id, box = $('#gameContent')) {
 
     box.innerHTML = `
       <div class="scoreboard">
-        <div class="team ${home ? 'saipa' : ''}">${esc(homeName)}</div>
+        <div class="team ${home && full.focus === SAIPA_NUM ? 'saipa' : ''}">${esc(homeName)}</div>
         <div class="score">${hg}–${ag}${suffix}</div>
-        <div class="team away ${home ? '' : 'saipa'}">${esc(awayName)}</div>
+        <div class="team away ${!home && full.focus === SAIPA_NUM ? 'saipa' : ''}">${esc(awayName)}</div>
         <div class="meta">
           <span>${fiDate(full.start)}</span>
           <span>xG <b>${num(hxg, 2)}–${num(axg, 2)}</b></span>
@@ -717,7 +738,7 @@ function drawPeriodContent(el, a, period, full) {
   // Saves by situation and by zone, from the shot map (shots on goal the goalie faced)
   const faced = new Map();
   for (const x of GAME_SM) {
-    if (x.shootingTeamId === SAIPA_NUM || !isSog(x) || (period != null && x.period !== period)) continue;
+    if (x.shootingTeamId === GAME_FOCUS || !isSog(x) || (period != null && x.period !== period)) continue;
     const n = normShot(x), f = faced.get(x.blockerId) || [];
     f.push(n); faced.set(x.blockerId, f);
   }
@@ -964,7 +985,7 @@ async function renderSeason() {
     drawSeasonSkaters(sk, team);
     { const el = $('#leCard'); if (el) { if (typeof renderLineupEditor === 'function') renderLineupEditor(el, sk).catch(e => { el.innerHTML = `<h2>Kokoonpanoeditori</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }); else el.remove(); } }
     drawSeasonGoalies(gks, null);
-    { const el = $('#attFcCard'); if (el) { if (typeof renderAttendanceForecast === 'function') Promise.all([loadHistoryGames(), getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)]).then(([hg, sc]) => renderAttendanceForecast(el, hg, sc)).catch(e => { el.innerHTML = `<h2>Yleisöennuste</h2><p class="neg-num">${esc(e.message)}</p>`; }); else el.remove(); } }
+    { const el = $('#attFcCard'); if (el) { if (typeof renderAttendanceForecast === 'function') whenVisible(el, () => Promise.all([loadHistoryGames(), getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)]).then(([hg, sc]) => renderAttendanceForecast(el, hg, sc)).catch(e => { el.innerHTML = `<h2>Yleisöennuste</h2><p class="neg-num">${esc(e.message)}</p>`; })); else el.remove(); } }
   } catch (e) {
     seasonDone = false;
     box.innerHTML = `<p class="neg-num">Kauden lataus epäonnistui: ${esc(e.message)}</p>`;
@@ -983,12 +1004,12 @@ async function seasonExtras(gks) {
   Promise.all(saipaGames.map(g => loadRaw(g.id)))
     .then(raws => put('#stateCard', 'Pelitilanteittain', stateHtml(stateSplits(raws))))
     .catch(fail('#stateCard', 'Pelitilanteittain'));
-  loadLeagueShots().then(L => {
+  whenVisible([$('#profileCard'), $('#ctxCard'), $('#gkCard')], () => loadLeagueShots().then(L => {
     put('#profileCard', 'Mistä maalit syntyvät', seasonProfileHtml(L));
     try { put('#ctxCard', 'Reboundit ja nopeat hyökkäykset', contextHtml(L, SEASON_SK)); } catch (e) { fail('#ctxCard', 'Reboundit ja nopeat hyökkäykset')(e); }
     drawSeasonGoalies(gks, L);
     const gm = $('#gkMapCard'); if (gm) gm.innerHTML = `<h3>Laukaukset kartalla</h3>${goalieMapsHtml(L, [...gks].sort((a, b) => b.toi - a.toi))}`;
-  }).catch(e => { fail('#profileCard', 'Mistä maalit syntyvät')(e); fail('#ctxCard', 'Reboundit ja nopeat hyökkäykset')(e); const gm = $('#gkMapCard'); if (gm) gm.innerHTML = `<p class="neg-num">Laukauskarttojen lataus epäonnistui: ${esc(e.message)}</p>`; });
+  }).catch(e => { fail('#profileCard', 'Mistä maalit syntyvät')(e); fail('#ctxCard', 'Reboundit ja nopeat hyökkäykset')(e); const gm = $('#gkMapCard'); if (gm) gm.innerHTML = `<p class="neg-num">Laukauskarttojen lataus epäonnistui: ${esc(e.message)}</p>`; }));
 }
 
 function badge(p) {
@@ -1285,6 +1306,7 @@ function viewUrl(view, sub) {
   const u = new URLSearchParams({ view: URL_VIEW[view] || view });
   if (sub) u.set('tab', URL_TAB[sub] || sub);
   if (view === 'historia' && typeof HIST_DATE !== 'undefined' && HIST_DATE) u.set('date', HIST_DATE);
+  if (view === 'live') { const id = (urlState().view === 'live' && urlState().id) || (typeof liveSelected === 'function' ? liveSelected() : null); if (id) u.set('id', id); }
   return '?' + u.toString();
 }
 function setUrl(url, push) {
@@ -1298,6 +1320,7 @@ function show(view, push = false) {
   if (view === 'kausi') renderSeason();
   if (view === 'historia') renderHistory();
   if (view === 'info' && typeof renderForecastTrack === 'function') renderForecastTrack($('#fcTrack'));
+  if (typeof liveResume === 'function') liveResume(view);
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.view, true));
 // Back / Forward: redraw the view the address points to

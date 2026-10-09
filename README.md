@@ -19,6 +19,7 @@ python3 -m http.server 8000
 - **Ottelu (Game):** pick any SaiPa game, including the next one. Each game has these sub-views:
   - **Ennakko (Preview):** team comparison with league ranks, form, period profiles, forecast with backtest, key matchups, net-front comparison, lineups, hot/cold players, goaltending and head-to-head history. For played games it is rebuilt from the data that existed before the game.
   - **Ottelu (Report):** deserved result, game flow, goals with video links, shot map with filters, Game MVP based on game score, goalie GSAx, bonus stats, period selector, full lineup.
+- **Live** (`?view=live`, `?view=live&id=ID`): every Liiga game of the day (or the next game day) with score and clock; a game opens from 10 minutes before puck drop with the same live view as SaiPa's games. Other teams' games default to the home team's point of view and can be switched to the away team. SaiPa's games open in the game view's Live tab.
   - **Live:** shown from 10 minutes before puck drop while a SaiPa game is on. Refreshes itself (15 s, 60 s in intermissions): score header with power plays, intermission clock and an event history, win probability, xG, pressure, best player, goalie, periods table, ice time, and the parts of the report that are useful during a game. Optional: delete `live.js` and its script tag to remove it.
   - Test mode for the live view: `?game=GAME_ID&tab=live&replay=1` replays a played game with a time slider.
   - Deep link: `?game=GAME_ID&tab=preview|report|live`.

@@ -1100,3 +1100,28 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .att-t td small { font-size: 10px; }
 .att-t td:first-child, .att-t td:nth-child(2) { white-space: nowrap; }
 @media (max-width: 600px) { .att-fc .gc-l { font-size: 12px; } .att-t td:last-child { min-width: 180px; } }
+
+/* LV-2: live page for every game */
+.tab-live { white-space: nowrap; }
+.tab-live .lv-dot { animation: none; width: 8px; height: 8px; margin-right: 5px; }
+.lh-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.lh-h b { font-family: "Barlow Condensed", Inter, sans-serif; font-size: 22px; font-weight: 800; text-transform: uppercase; }
+.lh-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.lh-g { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; column-gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); text-decoration: none; min-width: 0; }
+.lh-g .lh-s { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.lh-g .lh-t { grid-column: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lh-g b { grid-column: 2; grid-row: 2 / span 2; align-self: center; font-family: "Barlow Condensed", Inter, sans-serif; font-size: 24px; font-weight: 800; }
+a.lh-g:hover { border-color: var(--ink); }
+.lh-g.on { border: 2px solid var(--ink); padding: 7px 9px; box-shadow: inset 4px 0 0 var(--yellow); }
+.lh-g.sai { background: #fff8d6; }
+.lh-g.off { opacity: .55; cursor: default; }
+.lh-empty { margin: 16px 2px; }
+.lv-persp { margin-left: 4px; }
+.lv-persp button.on { background: var(--ink); color: #fff; }
+@media (max-width: 560px) {
+  .lh-list { grid-template-columns: 1fr 1fr; }
+  .tabs { gap: 0; max-width: 100%; }
+  .tab { font-size: 15px; padding: 5px 6px; }
+  .tab-live .lv-dot { width: 7px; height: 7px; margin-right: 4px; }
+}
+@media (max-width: 380px) { .tab { font-size: 14px; padding: 5px 4px; } }
