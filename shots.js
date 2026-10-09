@@ -272,7 +272,8 @@ function previewProfileHtml(P, sai, opp, oppName, oppTeam = null, L = null, befo
   const pic = (x, side) => {
     const sh = share(x, side), id = `srC${++uid}`, max = Math.max(0.01, ...SECTORS.map(s => sh.of(s.k)));
     let shapes = '', labels = '';
-    for (const s of SECTORS) {
+    // The slot rectangle sits inside the two wing rectangles, so it is drawn last to stay on top (hover and shade)
+    for (const s of [...SECTORS].sort((a, b) => (a.k === 'slot') - (b.k === 'slot'))) {
       const [x0, y0, x1, y1] = R[s.k], [lx, ly, fs] = LBL[s.k], z = x.t[side][s.k], f = sh.of(s.k);
       const tip = `${s.l}\n${side === 'f' ? 'Tehdyt maalit' : 'Päästetyt maalit'}\t${z.g} (${pct(f, 0)})\n${side === 'f' ? 'Laukausyritykset' : 'Vastustajan yritykset'}\t${num(z.att / x.t.n, 1)} / ott.`;
       shapes += `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" class="sr" style="fill:rgba(26,26,26,${(0.03 + 0.2 * f / max).toFixed(2)})" data-tip="${esc(tip)}"/>`;
