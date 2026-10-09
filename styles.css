@@ -1082,3 +1082,21 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 /* Shot maps: goal whose scorer was corrected from the official goal events */
 .mk-fix { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 4 3; }
 .sm-legend .lg-fix { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px dashed var(--ink); vertical-align: -2px; margin-right: 4px; }
+/* Attendance scenarios (attendance.js) */
+.att-years { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.att-fc .att-act { fill: none; stroke: var(--ink); stroke-width: 2.5; }
+.att-fc .att-dot { fill: var(--ink); }
+.att-fc .att-sc { fill: none; stroke-width: 2; stroke-dasharray: 6 4; }
+.att-fc .att-bench, .att-legend i.att-bench { stroke: #7a8a99; border-color: #7a8a99; }
+.att-fc .att-cur, .att-legend i.att-cur { stroke: var(--c-tuotanto); border-color: var(--c-tuotanto); }
+.att-fc .att-tough, .att-legend i.att-tough { stroke: var(--bad); border-color: var(--bad); }
+.att-fc .att-target { stroke: var(--good); stroke-width: 1.5; }
+.att-fc .att-target-l { fill: var(--good); font-weight: 600; }
+.att-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
+.att-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px dashed; vertical-align: middle; margin-right: 5px; }
+.att-legend i.att-act { border-top: 2.5px solid var(--ink); }
+.att-legend i.att-target { border-top: 1.5px solid var(--good); }
+.att-t tr.att-played td { color: var(--ink-2); }
+.att-t td small { font-size: 10px; }
+.att-t td:first-child, .att-t td:nth-child(2) { white-space: nowrap; }
+@media (max-width: 600px) { .att-fc .gc-l { font-size: 12px; } .att-t td:last-child { min-width: 180px; } }

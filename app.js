@@ -891,7 +891,8 @@ async function renderSeason() {
         <div class="tiles s-hl" data-n="${hl.length}">${hl.join('')}</div>
       </div>
       <div class="card" id="trendCard"><h2>Kauden kulku</h2><p class="loading">Lasketaan…</p></div>
-      <div class="card" id="streakCard"><h2>Putket ja vire</h2><p class="loading">Lasketaan…</p></div>`)}
+      <div class="card" id="streakCard"><h2>Putket ja vire</h2><p class="loading">Lasketaan…</p></div>
+      <div class="card" id="attFcCard"><h2>Yleisöennuste</h2><p class="loading">Lasketaan…</p></div>`)}
       ${sec('pelaajat', `
       <div class="card">
         <h2>Kenttäpelaajat</h2>
@@ -935,6 +936,7 @@ async function renderSeason() {
     drawSeasonSkaters(sk, team);
     { const el = $('#leCard'); if (el) { if (typeof renderLineupEditor === 'function') renderLineupEditor(el, sk).catch(e => { el.innerHTML = `<h2>Kokoonpanoeditori</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }); else el.remove(); } }
     drawSeasonGoalies(gks, null);
+    { const el = $('#attFcCard'); if (el) { if (typeof renderAttendanceForecast === 'function') Promise.all([loadHistoryGames(), getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)]).then(([hg, sc]) => renderAttendanceForecast(el, hg, sc)).catch(e => { el.innerHTML = `<h2>Yleisöennuste</h2><p class="neg-num">${esc(e.message)}</p>`; }); else el.remove(); } }
   } catch (e) {
     seasonDone = false;
     box.innerHTML = `<p class="neg-num">Kauden lataus epäonnistui: ${esc(e.message)}</p>`;
