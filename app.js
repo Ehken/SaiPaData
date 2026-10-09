@@ -8,6 +8,7 @@ const SAIPA = '933686567';           // numeric part of SaiPa's teamId
 const MIN_TOI_MAX = 60 * 60;         // minimum ice time (s) for season lists, full threshold
 const MIN_TOI_PER_GAME = 8 * 60;     // early season: threshold = 8 min × games played
 let MIN_TOI_SEASON = MIN_TOI_MAX;
+let SEASON_SK = [];                   // season skaters (for cards that load later)
 
 // Game score weights. Tune the metric here.
 const W = {
@@ -76,7 +77,31 @@ async function fixShotmap(path, sm) {
   const clean = cleanShotmap(sm);
   const [, season, id] = path.match(/\/shotmap\/(\d+)\/(\d+)/) || [];
   const g = id ? await getJSON(`/games/${season}/${id}`).catch(() => null) : null;
-  return g ? shotmapScorers(clean, g) : clean;
+  return shotContext(g ? shotmapScorers(clean, g) : clean, g);
+}
+// Context for every shot of one game, used by season stats, previews and player pages:
+//  reb  = rebound: the same team's saved shot at most REB_S seconds earlier in the same period
+//  rebAllowed (on that saved shot) = the save gave the rebound
+//  rush = quick attack: at most RUSH_S seconds after the opponent's attempt in the same period, with no own
+//         attempt between; not a rebound and not right after the opponent's goal (faceoff at centre)
+//  hand = shooter's stick hand 'L' / 'R' from the game roster
+const REB_S = 3, RUSH_S = 10;
+function shotContext(sm, g) {
+  if (!Array.isArray(sm)) return sm;
+  const hand = new Map([...(g?.homeTeamPlayers || []), ...(g?.awayTeamPlayers || [])].filter(p => p.handedness).map(p => [p.id, p.handedness[0]]));
+  const seq = [...sm].sort((x, y) => x.gameTime - y.gameTime);
+  seq.forEach((s, i) => {
+    s.hand = hand.get(s.shooterId) || null; s.reb = false; s.rush = false;
+    let src = null;
+    for (let j = i - 1; j >= 0 && s.gameTime - seq[j].gameTime <= REB_S; j--) {
+      const p = seq[j];
+      if (p.period === s.period && p.shootingTeamId === s.shootingTeamId && p.eventType === 'GOALIE_BLOCKED') { src = p; break; }
+    }
+    if (src) { s.reb = true; src.rebAllowed = true; return; }
+    const prev = seq[i - 1];
+    s.rush = !!prev && prev.period === s.period && prev.shootingTeamId !== s.shootingTeamId && prev.eventType !== 'GOAL' && s.gameTime - prev.gameTime <= RUSH_S;
+  });
+  return sm;
 }
 // The shot map keeps the original shooter when the league later changes the scorer (e.g. a tip, seen in
 // SaiPa–Ässät 23.9.2026: map Fridrich, official Tauslahti). Each goal row takes the scorer of the official goal
@@ -918,6 +943,7 @@ async function renderSeason() {
       </div>`)}
       ${sec('joukkue', `
       <div class="card" id="profileCard"><h2>Mistä maalit syntyvät</h2><p class="loading">Haetaan koko liigan laukauskarttoja…</p></div>
+      <div class="card" id="ctxCard"><h2>Reboundit ja nopeat hyökkäykset</h2><p class="loading">Haetaan koko liigan laukauskarttoja…</p></div>
       <div class="card" id="stateCard"><h2>Pelitilanteittain</h2><p class="loading">Lasketaan…</p></div>
       <div class="card" id="dsvCard"><h2>Sarjataulukko maalipaikkojen mukaan</h2><p class="loading">Lasketaan odotettuja pisteitä…</p></div>`)}
       ${sec('liiga', `
@@ -932,6 +958,7 @@ async function renderSeason() {
     tabBar.querySelectorAll('.sbtn').forEach(b => b.onclick = () => showSec(b.dataset.k));
     showSec(SEASON_TAB);
 
+    SEASON_SK = sk;
     seasonExtras(gks);
     seasonInsights(games);
     drawSeasonSkaters(sk, team);
@@ -958,9 +985,10 @@ async function seasonExtras(gks) {
     .catch(fail('#stateCard', 'Pelitilanteittain'));
   loadLeagueShots().then(L => {
     put('#profileCard', 'Mistä maalit syntyvät', seasonProfileHtml(L));
+    try { put('#ctxCard', 'Reboundit ja nopeat hyökkäykset', contextHtml(L, SEASON_SK)); } catch (e) { fail('#ctxCard', 'Reboundit ja nopeat hyökkäykset')(e); }
     drawSeasonGoalies(gks, L);
     const gm = $('#gkMapCard'); if (gm) gm.innerHTML = `<h3>Laukaukset kartalla</h3>${goalieMapsHtml(L, [...gks].sort((a, b) => b.toi - a.toi))}`;
-  }).catch(e => { fail('#profileCard', 'Mistä maalit syntyvät')(e); const gm = $('#gkMapCard'); if (gm) gm.innerHTML = `<p class="neg-num">Laukauskarttojen lataus epäonnistui: ${esc(e.message)}</p>`; });
+  }).catch(e => { fail('#profileCard', 'Mistä maalit syntyvät')(e); fail('#ctxCard', 'Reboundit ja nopeat hyökkäykset')(e); const gm = $('#gkMapCard'); if (gm) gm.innerHTML = `<p class="neg-num">Laukauskarttojen lataus epäonnistui: ${esc(e.message)}</p>`; });
 }
 
 function badge(p) {
@@ -1013,6 +1041,10 @@ function drawSeasonGoalies(gks, L) {
     if (teamNum(g.homeTeamId) !== SAIPA_NUM && teamNum(g.awayTeamId) !== SAIPA_NUM) continue;
     for (const x of L.shots.get(g.id) || []) if (x.shootingTeamId !== SAIPA_NUM && isSog(x) && faced.has(x.blockerId)) faced.get(x.blockerId).push(normShot(x));
   }
+  // League rebounds per 100 saves (all goalies)
+  let lgSv = 0, lgRb = 0;
+  if (L) for (const sm of L.shots.values()) for (const x of sm) if (x.eventType === 'GOALIE_BLOCKED') { lgSv++; if (x.rebAllowed) lgRb++; }
+  const LG_RB100 = lgSv ? lgRb / lgSv * 100 : null;
   const G = (k, l, en, fi, f, sv, g) => ({ k, l, t: `${en}${fi ? '\n' + fi : ''}`, f, s: sv, ...(g ? { g } : {}) });
   const svG = (k, l, en, fi, test) => G(k, l, en, fi, p => { const f = (faced.get(p.id) || []).filter(test), sv = f.filter(x => !x.goal).length; return f.length ? `${pct(sv / f.length, 1)} <small class="muted">${sv}/${f.length}</small>` : '–'; },
     p => { const f = (faced.get(p.id) || []).filter(test); return f.length ? f.filter(x => !x.goal).length / f.length : -1; });
@@ -1043,6 +1075,13 @@ function drawSeasonGoalies(gks, L) {
       G('qsPct', 'QS%', 'Quality Start Percentage', 'Laatutorjunnat / aloitukset. Noin 60 % on hyvä taso.', p => pct(p.qsPct, 0), p => p.qsPct ?? -1),
     ]],
     ...(L ? {
+      reb: ['Reboundit', 'rb100', [
+        G('svN', 'SV', 'Saves', 'Torjunnat laukauskartallisissa otteluissa', p => (faced.get(p.id) || []).filter(x => !x.goal).length, p => (faced.get(p.id) || []).filter(x => !x.goal).length),
+        G('rba', 'RBA', 'Rebounds Allowed', 'Torjunnat, joista vastustaja laukoi uudelleen enintään 3 s sisällä', p => (faced.get(p.id) || []).filter(x => x.rebAllowed).length, p => (faced.get(p.id) || []).filter(x => x.rebAllowed).length),
+        G('rb100', 'RB/100', 'Rebounds per 100 Saves', `Reboundit 100 torjuntaa kohden. Pienempi on parempi. Liigan keskiarvo ${num(LG_RB100, 1)}.`, p => { const f = faced.get(p.id) || [], sv = f.filter(x => !x.goal).length; return sv ? num(f.filter(x => x.rebAllowed).length / sv * 100, 1) : '–'; },
+          p => { const f = faced.get(p.id) || [], sv = f.filter(x => !x.goal).length; return sv ? -f.filter(x => x.rebAllowed).length / sv : -99; }),
+        G('rbga', 'RBGA', 'Rebound Goals Against', 'Päästetyt maalit reboundeista', p => (faced.get(p.id) || []).filter(x => x.goal && x.reb).length, p => -(faced.get(p.id) || []).filter(x => x.goal && x.reb).length),
+      ]],
       tilanne: ['Tilanteittain', 'svEv', [
         svG('svEv', 'EV SV%', 'Even Strength Save Percentage', 'Torjuntaprosentti tasakentin', x => x.situ === 'TV'),
         svG('svPk', 'SH SV%', 'Short-Handed Save Percentage', 'Torjuntaprosentti alivoimalla', x => x.situ === 'YV'),

@@ -194,6 +194,8 @@ function teamShotProfiles(L, before = null) {
       z.slotSogPg = n ? z.slot.sog / n : null;
       z.slotSh = z.slot.sog ? z.slot.g / z.slot.sog : null;
       z.allPg = n ? z.all / n : null;
+      z.rebPg = n ? z.reb.att / n : null;
+      z.rushPg = n ? z.rush.att / n : null;
     }
   }
   // League ranks (1 = most). For "against" metrics rank 1 means conceding the most.
@@ -205,10 +207,19 @@ function teamShotProfiles(L, before = null) {
   rank(t => t.f.slotPg, 'fSlotPg'); rank(t => t.a.slotPg, 'aSlotPg');
   rank(t => t.f.slotShare, 'fSlotShare'); rank(t => t.a.slotShare, 'aSlotShare');
   rank(t => t.f.slotSh, 'fSlotSh'); rank(t => t.a.slotSh, 'aSlotSh');
+  rank(t => t.f.rebPg, 'fRebPg'); rank(t => t.a.rebPg, 'aRebPg');
+  rank(t => t.f.rushPg, 'fRushPg'); rank(t => t.a.rushPg, 'aRushPg');
   return { teams: T, nTeams: teams.length };
 }
-function blankZones() { const z = { all: 0 }; for (const k of ZONES) z[k.k] = { att: 0, sog: 0, g: 0 }; return z; }
-function addZone(z, n) { z.all++; const c = z[n.zone]; c.att++; if (n.sog) c.sog++; if (n.goal) c.g++; }
+function blankZones() { const z = { all: 0, goals: 0, reb: { att: 0, g: 0 }, rush: { att: 0, g: 0 } }; for (const k of ZONES) z[k.k] = { att: 0, sog: 0, g: 0 }; return z; }
+function addZone(z, n) {
+  z.all++; const c = z[n.zone]; c.att++; if (n.sog) c.sog++; if (n.goal) { c.g++; z.goals++; }
+  for (const k of ['reb', 'rush']) if (n[k]) { z[k].att++; if (n.goal) z[k].g++; }
+}
+// Off-wing shot: a left-handed shooter from the right side or a right-handed shooter from the left side (facing the
+// net). Shots within 1.5 m of the middle line, from behind the net or without a known stick hand give null.
+const offWing = n => !n.hand || n.zone === 'behind' || Math.abs(n.y - RINK.cy) < 1.5 * RINK.perM ? null : (n.hand === 'L') === (n.y > RINK.cy);
+const CTX_DEF = 'Rebound = laukaus enintään 3 s saman joukkueen torjutun laukauksen jälkeen. Nopea hyökkäys = laukaus enintään 10 s vastustajan laukausyrityksen jälkeen ilman omaa laukausta välissä.';
 
 /* ---------- SM-3: team shot profile ---------- */
 function zoneHeat(shots, cls) {
@@ -232,6 +243,10 @@ function profileHeadlines(P, sai, opp, oppName) {
   if (top(o.rank.aSlotPg)) out.push({ k: `${esc(oppName)} päästää eteensä`, v: num(o.a.slotPg, 1), t: `vastustajan yritystä maalin edestä / ottelu · Liigan ${o.rank.aSlotPg === 1 ? 'eniten' : `${o.rank.aSlotPg}. eniten`}`, cls: 'good' });
   if (bottom(o.rank.aSlotPg)) out.push({ k: `${esc(oppName)} suojaa maalinsa`, v: num(o.a.slotPg, 1), t: `vastustajan yritystä maalin edestä / ottelu · Liigan ${N - o.rank.aSlotPg + 1}. vähiten`, cls: 'bad' });
   if (top(s.rank.fSlotPg)) out.push({ k: 'SaiPa maalin edessä', v: num(s.f.slotPg, 1), t: `yritystä maalin edestä / ottelu · Liigan ${s.rank.fSlotPg}.`, cls: 'good' });
+  if (top(s.rank.fRebPg)) out.push({ k: 'SaiPa reboundeilla', v: num(s.f.rebPg, 1), t: `rebound-yritystä / ottelu · Liigan ${s.rank.fRebPg}.`, cls: 'good' });
+  if (top(o.rank.aRebPg)) out.push({ k: `${esc(oppName)} antaa reboundeja`, v: num(o.a.rebPg, 1), t: `vastustajan rebound-yritystä / ottelu · Liigan ${o.rank.aRebPg === 1 ? 'eniten' : `${o.rank.aRebPg}. eniten`}`, cls: 'good' });
+  if (top(o.rank.fRushPg)) out.push({ k: `${esc(oppName)} nopeissa hyökkäyksissä`, v: num(o.f.rushPg, 1), t: `yritystä nopeista hyökkäyksistä / ottelu · Liigan ${o.rank.fRushPg}.`, cls: 'opp' });
+  if (top(o.rank.aRushPg)) out.push({ k: `${esc(oppName)} altis nopeille hyökkäyksille`, v: num(o.a.rushPg, 1), t: `vastustajan yritystä nopeista hyökkäyksistä / ottelu · Liigan ${o.rank.aRushPg === 1 ? 'eniten' : `${o.rank.aRushPg}. eniten`}`, cls: 'good' });
   if (top(o.rank.fSlotPg)) out.push({ k: `${esc(oppName)} maalin edessä`, v: num(o.f.slotPg, 1), t: `yritystä maalin edestä / ottelu · Liigan ${o.rank.fSlotPg}.`, cls: 'opp' });
   return out;
 }
@@ -344,6 +359,69 @@ function previewProfileHtml(P, sai, opp, oppName, oppTeam = null, L = null, befo
 
 // Season view: where SaiPa scores and concedes, against the league's shares
 const seasonProfileHtml = L => previewProfileHtml(null, null, SAIPA_NUM, 'SaiPa', null, L, null) || '<p class="muted">Laukausdataa ei vielä ole.</p>';
+
+/* ---------- rebounds, quick attacks and off-wing shots ---------- */
+// Rank text: for conceded numbers rank 1 = concedes the most
+const ctxRank = (r, N, conceded) => !r ? '' : conceded && r > N / 2 ? `Liigan ${N - r + 1}. vähiten` : `Liigan ${r}. eniten`;
+function ctxLeague(P) {
+  const teams = [...P.teams.values()].filter(t => t.n), gp = teams.reduce((a, t) => a + t.n, 0), goals = teams.reduce((a, t) => a + t.f.goals, 0);
+  const one = k => { const att = teams.reduce((a, t) => a + t.f[k].att, 0), g = teams.reduce((a, t) => a + t.f[k].g, 0); return { pg: gp ? att / gp : null, share: goals ? g / goals : null, sh: att ? g / att : null }; };
+  return { reb: one('reb'), rush: one('rush') };
+}
+// Season view: SaiPa's rebounds and quick attacks for and against, and the players' shot types
+function contextHtml(L, sk = []) {
+  const P = teamShotProfiles(L), s = P.teams.get(SAIPA_NUM), N = P.nTeams;
+  if (!s?.n) return '<p class="muted">Laukausdataa ei vielä ole.</p>';
+  const lg = ctxLeague(P), K = { reb: 'Reb', rush: 'Rush' };
+  const cells = (side, k) => {
+    const z = s[side][k], key = `${side}${K[k]}Pg`, r = s.rank[key];
+    return `<td data-tip="${esc(`${ctxRank(r, N, side === 'a')}\nLiigan keskiarvo\t${num(lg[k].pg, 1)} / ott.`)}"><b>${num(z.att / s.n, 1)}</b> <small class="muted">${r}.</small></td>`
+      + `<td data-tip="${esc(`Maaliin\t${pct(z.att ? z.g / z.att : null, 0)} yrityksistä\nLiigassa\t${pct(lg[k].sh, 0)}`)}">${z.g} <small class="muted">${pct(s[side].goals ? z.g / s[side].goals : null, 0)}</small></td>`;
+  };
+  const th = (l, tip) => `<th data-tip="${esc(tip)}">${l}</th>`;
+  const team = `<div class="tablewrap"><table class="mini ctx-t"><thead><tr><th></th>
+    ${th('Reboundit / ott.', 'Rebound-yritykset per ottelu ja sija liigassa')}${th('Rebound-maalit', 'Maalit reboundeista ja osuus kaikista maaleista')}
+    ${th('Nopeat hyökkäykset / ott.', 'Yritykset nopeista hyökkäyksistä per ottelu ja sija liigassa')}${th('Maalit nopeista', 'Maalit nopeista hyökkäyksistä ja osuus kaikista maaleista')}</tr></thead><tbody>
+    <tr><td>SaiPa tekee</td>${cells('f', 'reb')}${cells('f', 'rush')}</tr>
+    <tr><td>SaiPa päästää</td>${cells('a', 'reb')}${cells('a', 'rush')}</tr>
+    <tr class="muted"><td>Liigan keskiarvo</td><td>${num(lg.reb.pg, 1)}</td><td>${pct(lg.reb.share, 0)}</td><td>${num(lg.rush.pg, 1)}</td><td>${pct(lg.rush.share, 0)}</td></tr>
+    </tbody></table></div>`;
+  // SaiPa players
+  const byId = new Map(sk.map(p => [p.id, p])), P2 = new Map();
+  for (const g of L.ended) for (const x of L.shots.get(g.id) || []) {
+    if (x.shootingTeamId !== SAIPA_NUM || !byId.has(x.shooterId)) continue;
+    const n = normShot(x), o = P2.get(x.shooterId) || P2.set(x.shooterId, { cf: 0, rb: 0, rbg: 0, ru: 0, rug: 0, ow: 0, owN: 0, owg: 0, hand: null }).get(x.shooterId);
+    o.cf++; o.hand = o.hand || x.hand; if (n.reb) { o.rb++; if (n.goal) o.rbg++; } if (n.rush) { o.ru++; if (n.goal) o.rug++; }
+    const w = offWing(n); if (w != null) { o.owN++; if (w) { o.ow++; if (n.goal) o.owg++; } }
+  }
+  const rows = [...P2.entries()].filter(([, o]) => o.cf >= 10).sort((a, b) => b[1].cf - a[1].cf).map(([id, o]) => {
+    const p = byId.get(id), hand = o.hand;
+    return `<tr><td>${plink(p, `${esc(p.first)} ${esc(p.last)}`)}${hand ? ` <small class="muted">(${hand})</small>` : ''}</td><td>${o.cf}</td><td>${o.rb}</td><td><b>${o.rbg}</b></td><td>${o.ru}</td><td><b>${o.rug}</b></td><td>${pct(o.owN ? o.ow / o.owN : null, 0)}</td><td><b>${o.owg}</b></td></tr>`;
+  }).join('');
+  const pth = (l, en, fi) => `<th data-tip="${esc(`${en}\n${fi}`)}">${l}</th>`;
+  const players = rows ? `<h3>Pelaajat</h3><div class="tablewrap"><table class="mini ctx-p"><thead><tr><th>Pelaaja</th>
+    ${pth('iCF', 'Individual Corsi For', 'Laukausyritykset')}${pth('RB', 'Rebound Attempts', 'Yritykset reboundista')}${pth('RBG', 'Rebound Goals', 'Maalit reboundista')}
+    ${pth('RU', 'Rush Attempts', 'Yritykset nopeista hyökkäyksistä')}${pth('RUG', 'Rush Goals', 'Maalit nopeista hyökkäyksistä')}
+    ${pth('OW%', 'Off-Wing Shot Share', 'Osuus yrityksistä väärältä laidalta: vasenkätinen oikealta tai oikeakätinen vasemmalta. Keskeltä (alle 1,5 m keskilinjasta) ja maalin takaa tulleet eivät ole mukana.')}
+    ${pth('OWG', 'Off-Wing Goals', 'Maalit väärältä laidalta')}</tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted small">Vähintään 10 laukausyritystä · (L) / (R) = mailakäsi</p>` : '';
+  return `${team}${players}<p class="muted small">${CTX_DEF}${s.n < s.gp ? ` Laukauskartta julkaistu ${s.n}/${s.gp} ottelusta.` : ''}</p>`;
+}
+// Preview: both teams' rebounds and quick attacks, home team first
+function contextPreviewHtml(P, opp, oppName) {
+  const s = P?.teams.get(SAIPA_NUM), o = P?.teams.get(opp), N = P?.nTeams;
+  if (!s?.n || !o?.n) return '';
+  const lg = ctxLeague(P), swap = typeof PV_SWAP !== 'undefined' && PV_SWAP;
+  const cell = (t, side, k) => { const key = `${side}${k === 'reb' ? 'Reb' : 'Rush'}Pg`, r = t.rank[key];
+    return `<td data-tip="${esc(`${ctxRank(r, N, side === 'a')}\nLiigan keskiarvo\t${num(lg[k].pg, 1)} / ott.`)}"><b>${num(t[side][`${k}Pg`], 1)}</b> <small class="muted">${r}.</small></td>`; };
+  const row = (t, name) => `<tr><td>${esc(name)}</td>${cell(t, 'f', 'reb')}${cell(t, 'a', 'reb')}${cell(t, 'f', 'rush')}${cell(t, 'a', 'rush')}</tr>`;
+  const th = (l, tip) => `<th data-tip="${esc(tip)}">${l}</th>`;
+  return `<h3>Reboundit ja nopeat hyökkäykset</h3><div class="tablewrap"><table class="mini ctx-t"><thead><tr><th></th>
+    ${th('Reboundit', 'Omat rebound-yritykset per ottelu ja sija liigassa')}${th('Päästetyt reboundit', 'Vastustajan rebound-yritykset per ottelu ja sija liigassa (1. = päästää eniten)')}
+    ${th('Nopeat hyökkäykset', 'Omat yritykset nopeista hyökkäyksistä per ottelu ja sija liigassa')}${th('Päästetyt nopeat', 'Vastustajan yritykset nopeista hyökkäyksistä per ottelu ja sija liigassa (1. = päästää eniten)')}</tr></thead>
+    <tbody>${swap ? row(o, oppName) + row(s, 'SaiPa') : row(s, 'SaiPa') + row(o, oppName)}</tbody></table></div>
+    <p class="muted small">${CTX_DEF}</p>`;
+}
 
 /* ---------- SM-4: goalie map ---------- */
 // Shots on goal faced by each SaiPa goalie. The shot map's blockerId is the goalie for goals and saves.

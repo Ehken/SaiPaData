@@ -358,7 +358,7 @@ async function renderPreview(id, box) {
       const card = box.querySelector('#pfCard');
       if (!card) return;
       const html = previewProfileHtml(P, sai, oppId, opp.name, opp, L, next.start);
-      card.innerHTML = html ? `<h2>Mistä maalit syntyvät</h2>${html}` : '';
+      card.innerHTML = html ? `<h2>Mistä maalit syntyvät</h2>${html}${contextPreviewHtml(P, oppId, opp.name)}` : '';
       if (!html) card.remove();
       const hl = box.querySelector('.hl-grid');
       if (hl) for (const c of profileHeadlines(P, sai, oppId, opp.name)) hl.insertAdjacentHTML('beforeend', hlCard(c.k, c.v, c.t, c.cls));

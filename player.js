@@ -250,6 +250,11 @@ function skaterShots(id, rows, league, box) {
           ${ZONES.map(k => { const a = z(k.k); if (!a.length) return ''; const sog = a.filter(s => s.sog).length, gl = a.filter(s => s.goal).length;
             return `<tr><td title="${esc(k.d)}">${k.l}</td><td>${a.length}</td><td>${sog}</td><td><b>${gl}</b></td><td>${pct(sog ? gl / sog : null, 0)}</td></tr>`; }).join('')}
           <tr><td><b>Yhteensä</b></td><td>${mine.length}</td><td>${mine.filter(s => s.sog).length}</td><td><b>${mine.filter(s => s.goal).length}</b></td><td></td></tr></table>
+          <table class="mini"><tr><th>Laukauksen tyyppi</th><th data-tip="Individual Corsi For\nLaukausyritykset">iCF</th><th data-tip="Shots on Goal\nLaukaukset maalia kohti">SOG</th><th data-tip="Goals\nMaalit">G</th><th data-tip="Shooting Percentage\nMaalit / laukaukset maalia kohti">SH%</th></tr>
+          ${[['Rebound', s => s.reb, 'Enintään 3 s saman joukkueen torjutun laukauksen jälkeen'], ['Nopea hyökkäys', s => s.rush, 'Enintään 10 s vastustajan laukausyrityksen jälkeen ilman omaa laukausta välissä'],
+            ['Väärä laita', s => offWing(s) === true, 'Vasenkätinen oikealta tai oikeakätinen vasemmalta (ei keskeltä eikä maalin takaa)'], ['Oma laita', s => offWing(s) === false, 'Mailakäden puoleiselta laidalta (ei keskeltä eikä maalin takaa)']]
+            .map(([l, f, d]) => { const a = mine.filter(f); if (!a.length) return ''; const sog = a.filter(s => s.sog).length, gl = a.filter(s => s.goal).length;
+              return `<tr><td data-tip="${esc(d)}">${l}</td><td>${a.length}</td><td>${sog}</td><td><b>${gl}</b></td><td>${pct(sog ? gl / sog : null, 0)}</td></tr>`; }).join('')}</table>
           <p class="muted small">Mukana SaiPan ottelut, joista Liigalla on laukauskartta.${missing ? ` Kartta puuttuu ${missing} pelaajan ottelusta.` : ''}${fixedIn.length ? ` Liigan kartassa ${fixedIn.length === 1 ? 'yksi maali on' : `${fixedIn.length} maalia on`} merkitty tälle pelaajalle, mutta virallisesti ${fixedIn.length === 1 ? 'sen teki' : 'ne tekivät'} ${[...new Set(fixedIn.map(x => x.name))].join(', ')}.` : ''} SH% = maalit / laukaukset maalia kohti.</p>
         </div>
       </div>` : '<p class="muted">Ei laukausyrityksiä laukauskartoissa.</p>';
