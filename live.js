@@ -40,7 +40,7 @@ function replayCut(raw, T) {
     const team = G[`${side}Team`];
     team.goalEvents = (team.goalEvents || []).filter(e => e.gameTime <= T);
     team.penaltyEvents = (team.penaltyEvents || []).filter(e => e.gameTime <= T);
-    team.goals = team.goalEvents.filter(e => !(e.goalTypes || []).includes('VT0') && (e.period || 0) <= 4).length;
+    team.goals = team.goalEvents.filter(validGoal).length;
     const pers = st[`${side}Team`] || [];
     const xgOf = p => (p.periodPlayerStats || []).reduce((a, x) => a + (x.expectedGoalsPlayer || 0), 0);
     team.expectedGoals = pers.filter(p => p.period < cur).reduce((a, p) => a + xgOf(p), 0) + pers.filter(p => p.period === cur).reduce((a, p) => a + xgOf(p) * frac, 0);

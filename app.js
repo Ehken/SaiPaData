@@ -118,7 +118,7 @@ function shotContext(sm, g) {
 function shotmapScorers(sm, g) {
   if (!Array.isArray(sm) || !g?.game) return sm;
   const ev = [g.game.homeTeam, g.game.awayTeam].flatMap(t => (t.goalEvents || [])
-    .filter(e => !e.cancelled && e.scorerPlayerId)
+    .filter(e => !e.cancelled && e.scorerPlayerId && !(e.goalTypes || []).includes('RL0'))
     .map(e => ({ team: Number(String(t.teamId).split(':')[0]), t: e.gameTime, id: e.scorerPlayerId, used: false })));
   // Names for the correction note: the shooter the league's map had
   const nameOf = new Map([...(g.homeTeamPlayers || []), ...(g.awayTeamPlayers || [])].map(p => [p.id, `${p.firstName} ${p.lastName}`]));
@@ -211,8 +211,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ---------- game analysis ---------- */
-// Disallowed goals (VT0 = overturned on video review) and shootout goals (period 5) are not game goals.
-const validGoal = e => !(e.goalTypes || []).includes('VT0') && (e.period || 0) <= 4;
+// Not game goals: VT0 = overturned on video review, RL0 = missed penalty shot (the league lists it as a goal event,
+// seen in SaiPa's game on 15.10.2026), and shootout goals (period 5).
+const NO_GOAL = ['VT0', 'RL0'];
+const validGoal = e => !(e.goalTypes || []).some(t => NO_GOAL.includes(t)) && (e.period || 0) <= 4;
 const SAIPA_NUM = Number(SAIPA);
 // Whose point of view a game is analysed from: SaiPa in SaiPa's games, otherwise the home team (live view of
 // other games). Shared by the game report, the live view and the shot map.

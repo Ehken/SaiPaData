@@ -17,6 +17,7 @@ function reportData(g, st, sm) {
   const goals = [];
   for (const [team, mine] of [[S, true], [O, false]]) for (const e of team.goalEvents || []) {
     if ((e.period || 0) > 4) continue;  // shootout goals are not game goals
+    if ((e.goalTypes || []).includes('RL0')) continue;  // missed penalty shot: listed as a goal event, but no goal
     goals.push({ mine, t: e.gameTime, period: e.period, valid: !(e.goalTypes || []).includes('VT0'), types: (e.goalTypes || []).filter(x => !x.startsWith('VT')),
       scorer: e.scorerPlayer ? `${e.scorerPlayer.firstName} ${e.scorerPlayer.lastName}` : names.get(e.scorerPlayerId) || '?',
       assists: (e.assistantPlayers || []).map(a => `${a.firstName} ${a.lastName}`), winning: e.winningGoal });
