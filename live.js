@@ -77,9 +77,13 @@ function liveGameId() {
 // Fresh copies of the game endpoints, put into the shared cache so the report functions use them
 async function liveFetch(id) {
   if (LIVE_REPLAY) {
-    if (!replayRaw) {
-      const [g, st, sm] = await Promise.all([getJSON(`/games/${SEASON}/${id}`), getJSON(`/games/stats/${SEASON}/${id}`), getJSON(`/shotmap/${SEASON}/${id}`).catch(() => [])]);
-      replayRaw = { g, st, sm: Array.isArray(sm) ? sm : [] };
+    // Keyed by game: opening another game in test mode must not replay the previous game's data under its id
+    if (!replayRaw || String(replayRaw.id) !== String(id)) {
+      const paths = [`/games/${SEASON}/${id}`, `/games/stats/${SEASON}/${id}`, `/shotmap/${SEASON}/${id}`];
+      // The previous replay left cut copies of its game in the cache: drop them so other views read the full game
+      if (replayRaw) [`/games/${SEASON}/${replayRaw.id}`, `/games/stats/${SEASON}/${replayRaw.id}`, `/shotmap/${SEASON}/${replayRaw.id}`].forEach(p => cache.delete(p));
+      const [g, st, sm] = await Promise.all([getJSON(paths[0]), getJSON(paths[1]), getJSON(paths[2]).catch(() => [])]);
+      replayRaw = { id, g, st, sm: Array.isArray(sm) ? sm : [] };
     }
     const cut = replayCut(replayRaw, replayT);
     [`/games/${SEASON}/${id}`, `/games/stats/${SEASON}/${id}`, `/shotmap/${SEASON}/${id}`].forEach((p, i) => cache.set(p, Promise.resolve(cut[i])));
