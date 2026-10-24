@@ -512,6 +512,7 @@ async function renderGame(id, box = $('#gameContent')) {
     const hg = home ? full.saipa.goals : full.opp.goals, ag = home ? full.opp.goals : full.saipa.goals;
     const suffix = full.finishedType === 'ENDED_DURING_EXTENDED_GAME_TIME' ? ' JA' : full.finishedType === 'ENDED_DURING_WINNING_SHOT_COMPETITION' ? ' VL' : '';
     const hxg = home ? full.teamXg : full.oppXg, axg = home ? full.oppXg : full.teamXg;
+    const gm = typeof gameMetricsCard === 'function' ? gameMetricsCard(g, st, ctx.sm, rd) : null;
 
     box.innerHTML = `
       <div class="scoreboard">
@@ -537,6 +538,7 @@ async function renderGame(id, box = $('#gameContent')) {
         ${periodVsGame(summary, full.saipa.teamName, full.opp.teamName, home, { sxg: full.teamXg, oxg: full.oppXg })}
         <div class="erastars"><div class="es-k">⭐ Erän tähti</div>${perBest.filter(x => x.p).map(x => `<div class="es"><span>${PERIOD_LABEL(x.n)}</span><b>${esc(x.p.first + ' ' + x.p.last)}</b><small>${num(x.p.gs, 2)} pelipistettä</small></div>`).join('')}</div>
       </div>
+      ${gm ? `<div class="card" id="gmCard"><h2>Joukkueet vastakkain</h2>${gm.html}</div>` : ''}
 
       <div class="periodbar" role="tablist" aria-label="Valitse erä">
         <button class="pbtn active" data-p="all">Koko peli</button>
@@ -544,6 +546,7 @@ async function renderGame(id, box = $('#gameContent')) {
       </div>
       <div id="periodContent"></div>`;
 
+    if (gm) { const el = $('#gmCard', box); if (el) whenVisible(el, () => gm.fill(el)); }
     const setShotPeriod = initShotMap(box, ctx.sm, g, full.opp.teamName);
     const draw = sel => {
       setShotPeriod(sel === 'all' ? null : Number(sel));
@@ -965,12 +968,14 @@ async function renderSeason() {
         <div id="gkMapCard"><p class="loading">Haetaan laukauskarttoja…</p></div>
       </div>`)}
       ${sec('joukkue', `
+      <div class="card" id="tmCard"><h2>Joukkueen tunnusluvut</h2><p class="loading">Lasketaan…</p></div>
       <div class="card" id="profileCard"><h2>Mistä maalit syntyvät</h2><p class="loading">Haetaan koko liigan laukauskarttoja…</p></div>
       <div class="card" id="ctxCard"><h2>Reboundit ja nopeat hyökkäykset</h2><p class="loading">Haetaan koko liigan laukauskarttoja…</p></div>
       <div class="card" id="stateCard"><h2>Pelitilanteittain</h2><p class="loading">Lasketaan…</p></div>
       <div class="card" id="dsvCard"><h2>Sarjataulukko maalipaikkojen mukaan</h2><p class="loading">Lasketaan odotettuja pisteitä…</p></div>`)}
       ${sec('liiga', `
       <div class="card" id="fcTableCard"><h2>Sarjaennuste</h2><p class="loading">Simuloidaan loppukautta…</p></div>
+      <div class="card" id="monthCard"><h2>Kuukauden kuumimmat</h2><p class="loading">Haetaan liigan otteluita…</p></div>
       <div class="card" id="topCard"><h2>Liigan nopeimmat ja kovimmat</h2><p class="loading">Haetaan liigan tilastoja…</p></div>`)}`;
 
     // Section tabs
@@ -987,6 +992,11 @@ async function renderSeason() {
     drawSeasonSkaters(sk, team);
     { const el = $('#leCard'); if (el) { if (typeof renderLineupEditor === 'function') renderLineupEditor(el, sk).catch(e => { el.innerHTML = `<h2>Kokoonpanoeditori</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }); else el.remove(); } }
     drawSeasonGoalies(gks, null);
+    for (const [sel, title, fn] of [['#tmCard', 'Joukkueen tunnusluvut', 'renderTeamMetrics'], ['#monthCard', 'Kuukauden kuumimmat', 'renderMonthHot']]) {
+      const el = $(sel);
+      if (el && typeof window[fn] === 'function') whenVisible(el, () => window[fn](el).catch(e => { el.innerHTML = `<h2>${title}</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }));
+      else if (el) el.remove();
+    }
     { const el = $('#attFcCard'); if (el) { if (typeof renderAttendanceForecast === 'function') whenVisible(el, () => Promise.all([loadHistoryGames(), getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`)]).then(([hg, sc]) => renderAttendanceForecast(el, hg, sc)).catch(e => { el.innerHTML = `<h2>Yleisöennuste</h2><p class="neg-num">${esc(e.message)}</p>`; })); else el.remove(); } }
   } catch (e) {
     seasonDone = false;
