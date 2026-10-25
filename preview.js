@@ -353,6 +353,9 @@ async function renderPreview(id, box) {
     }).catch(e => { const card = box.querySelector('#fcCard'); if (card) card.innerHTML = `<h2>Ennuste</h2><p class="neg-num">Ennusteen laskenta epäonnistui: ${esc(e.message)}</p>`; });
 
     // SM-3: zone profiles from every shot map played before this game
+    { const el = box.querySelector('#gkcPvCard');
+      if (el) whenVisible(el, () => goalieCompareData(sG, next.start).then(d => goalieCompareCard(el, d, { compact: true, title: `${esc(gen(sai.name))} maalivahtivertailu` }))
+        .catch(e => { el.innerHTML = `<h2>Maalivahtivertailu</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; })); }
     whenVisible(box.querySelector('#pfCard'), () => loadLeagueShots().then(L => {
       const P = teamShotProfiles(L, next.start);
       const card = box.querySelector('#pfCard');
@@ -397,6 +400,7 @@ function previewHtml({ next, sai, opp, sG, oG, sSum, oSum, league, nextGame, liv
       <div class="card"><h2>Avainkamppailut</h2>${matchupsHtml(matchups, sai, opp)}</div>
       <div class="card"><h2>Avainpelaajat</h2><div class="grid2 flat">${pair(playersBlock(sai, sSum, photos(lineups?.sai), avail(lineups?.sai)), playersBlock(opp, oSum, photos(lineups?.opp), avail(lineups?.opp)))}</div></div>
       <div class="card"><h2>Maalivahdit</h2><div class="grid2 flat">${pair(goaliesBlock(sai, sSum, sG, nextGame, next), goaliesBlock(opp, oSum, oG, nextGame, next))}</div></div>
+      ${typeof goalieCompareCard === 'function' ? `<div class="card" id="gkcPvCard"><h2>${esc(gen(sai.name))} maalivahtivertailu</h2><p class="loading">Lasketaan…</p></div>` : ''}
       ${lineups ? `<div class="card"><h2>Kokoonpanot</h2>${lineupBoard(sai, opp, lineups, sSum, oSum)}</div>` : ''}
       <div class="card" id="pfCard"><h2>Mistä maalit syntyvät</h2><p class="loading">Haetaan koko liigan laukauskarttoja…</p></div>
       <div class="card" id="h2hCard"><h2>Keskinäiset <span class="h2-sub">runkosarja</span></h2><p class="loading">Haetaan otteluhistoriaa…</p></div>`;

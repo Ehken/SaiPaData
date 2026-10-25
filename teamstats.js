@@ -413,3 +413,116 @@ async function renderMonthHot(el) {
       <p class="muted small">Kalenterikuukauden runkosarjaottelut Suomen aikaa. Voittolaukauskilpailu ei mukana. Tasapisteissä enemmän maaleja ensin.</p>`;
   }
 }
+
+/* ---------- SaiPa goalies side by side over each goalie's own last N games ---------- */
+// games: teamGame(...) results for SaiPa in date order (oldest first). Wins and losses are the league's own decisions
+// from each goalie's game log (won / lost). The league does not give it to the goalie with the most ice time: in
+// HIFK–Lukko 1–5 (2025–26) the win went to Lukko's starter (23 min, 0 GA) and the loss to HIFK's starter pulled after
+// 8 minutes, so it follows the goalie in net at the deciding goal. Overtime and shootout results count as wins
+// and losses. A quality start (Rob Vollman) is a start with
+// save % at least the league average, or at least .885 on 20 shots or fewer.
+const GKC_WINDOWS = [1, 2, 3, 4, 5, 10, 15, 20, 30, 0];
+let GKC_N = 5;
+
+function goalieLogs(games, decs = new Map()) {
+  const L = new Map();
+  for (const gm of games) {
+    for (const p of gm.goalies || []) {
+      if (!p.toi) continue;
+      const t = L.get(p.id) || L.set(p.id, { id: p.id, first: p.first, last: p.last, jersey: p.jersey, log: [] }).get(p.id);
+      t.log.push({ start: gm.start, opp: gm.opp?.name || '', res: gm.res, gf: gm.gf, ga: gm.ga, toi: p.toi, saves: p.saves, gaG: p.ga, xga: p.xga,
+        started: gm.starter === p.id, dec: (d => d === 'T' ? (gm.win ? 'W' : 'L') : d || null)(decs.get(`${p.id}:${gm.id}`)) });
+    }
+  }
+  return [...L.values()];
+}
+
+function goalieWindow(g, n, lgSv) {
+  const log = n ? g.log.slice(-n) : g.log;
+  const s = f => log.reduce((a, x) => a + (f(x) || 0), 0);
+  const toi = s(x => x.toi), saves = s(x => x.saves), ga = s(x => x.gaG), xga = s(x => x.xga), sa = saves + ga;
+  const starts = log.filter(x => x.started), decs = log.filter(x => x.dec), wins = decs.filter(x => x.dec === 'W').length;
+  const qs = lgSv == null ? null : starts.filter(x => { const a = x.saves + x.gaG; return a && (x.saves / a >= lgSv || (a <= 20 && x.saves / a >= 0.885)); }).length;
+  return { ...g, log, gp: log.length, gs: starts.length, toi, saves, ga, sa, xga,
+    sv: sa ? saves / sa : null, gaa: toi ? ga / toi * 3600 : null, gsax: xga - ga, gsaxGp: log.length ? (xga - ga) / log.length : null,
+    wins, decs: decs.length, wPct: decs.length ? wins / decs.length : null, qs, qsPct: qs != null && starts.length ? qs / starts.length : null,
+    from: log[0]?.start, to: log[log.length - 1]?.start };
+}
+
+const GKC_ROWS = [
+  { k: 'gp', l: 'Ottelut', t: 'Games Played\nOttelut, joissa peliaikaa', f: p => `${p.gp}${p.gs !== p.gp ? ` <small>(${p.gs} aloitusta)</small>` : ''}`, hi: null },
+  { k: 'wPct', l: 'Voitto-%', t: 'Win Percentage\nVoitot / ratkaisut Liigan kirjauksen mukaan: ratkaisu menee maalivahdille, joka oli maalilla ratkaisevan maalin aikaan. Jatkoaika- ja voittolaukausvoitot ovat voittoja', f: p => p.decs ? `${pct(p.wPct, 0)} <small>${p.wins}–${p.decs - p.wins}</small>` : '–', hi: true },
+  { k: 'sv', l: 'SV%', t: 'Save Percentage\nTorjuntaprosentti', f: p => pct(p.sv, 1), hi: true },
+  { k: 'gaa', l: 'GAA', t: 'Goals Against Average\nPäästetyt maalit 60 minuuttia kohden', f: p => num(p.gaa, 2), hi: false },
+  { k: 'gsax', l: 'GSAx', t: 'Goals Saved Above Expected\nTorjutut maalit yli odotusten: maaliodottama miinus päästetyt maalit', f: p => signed(p.gsax, 2), hi: true },
+  { k: 'gsaxGp', l: 'GSAx / ott.', t: 'GSAx per Game\nTorjutut maalit yli odotusten ottelua kohden', f: p => signed(p.gsaxGp, 2), hi: true },
+  { k: 'qsPct', l: 'QS%', t: 'Quality Start Percentage\nLaatualoitusten osuus: torjunta-% vähintään liigan keskiarvo, tai vähintään 88,5 % kun laukauksia enintään 20', f: p => p.gs && p.qs != null ? `${pct(p.qsPct, 0)} <small>${p.qs}/${p.gs}</small>` : '–', hi: true },
+  { k: 'sa', l: 'Laukaukset', t: 'Shots Against\nLaukaukset maalia kohti', f: p => num(p.sa, 0), hi: null },
+  { k: 'ga', l: 'Päästetyt', t: 'Goals Against\nPäästetyt maalit', f: p => num(p.ga, 0), hi: null },
+];
+
+// Goalies as columns, metrics as rows; the best value of a row is highlighted when the direction is clear
+function goalieCompareHtml(gks, n, compact = false, lg = null) {
+  if (!gks.length) return '<p class="muted">Ei pelanneita maalivahteja.</p>';
+  const rows = (compact ? GKC_ROWS.filter(r => ['gp', 'wPct', 'sv', 'gsax', 'qsPct'].includes(r.k)) : GKC_ROWS).map(r => {
+    const vals = gks.map(p => p[r.k]).filter(v => v != null);
+    const best = r.hi == null || gks.length < 2 || !vals.length ? null : (r.hi ? Math.max(...vals) : Math.min(...vals));
+    const tied = best != null && vals.filter(v => v === best).length === vals.length;
+    const lgv = lg && lg[r.k] != null ? (r.k === 'sv' ? pct(lg.sv, 1) : r.k === 'gaa' ? num(lg.gaa, 2) : signed(lg[r.k], 2)) : '–';
+    return `<tr><th data-tip="${esc(r.t)}">${r.l}</th>${gks.map(p => `<td class="${best != null && !tied && p[r.k] === best ? 'gkc-best' : ''}">${r.f(p)}</td>`).join('')}${lg ? `<td class="gkc-lg">${lgv}</td>` : ''}</tr>`;
+  }).join('');
+  const range = p => p.from ? `${fiDate(p.from)}–${fiDate(p.to)}` : '';
+  const form = p => `<div class="gkc-form">${p.log.map(x => {
+    const gsax = x.xga - x.gaG, sv = (x.saves + x.gaG) ? x.saves / (x.saves + x.gaG) : null;
+    const tip = `${fiDate(x.start)} vs ${x.opp}, ${x.gf}–${x.ga}${x.res === 'JV' || x.res === 'JH' ? ' JA/VL' : ''}\nTorjunnat\t${x.saves}/${x.saves + x.gaG} (${pct(sv, 1)})\nGSAx\t${signed(gsax, 2)}\nPeliaika\t${mmss(x.toi)}${x.started ? '' : '\nTuli kesken ottelun'}`;
+    return `<i class="${gsax >= 0.5 ? 'g' : gsax <= -0.5 ? 'b' : ''}" data-tip="${esc(tip)}">${x.dec || '·'}</i>`;
+  }).join('')}</div>`;
+  return `<div class="tablewrap"><table class="data gkc"><thead><tr><th></th>${gks.map(p => `<th>${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<small>${range(p)}</small></th>`).join('')}${lg ? '<th class="gkc-lg" data-tip="Liigan kaikki maalivahdit koko kaudelta\nGSAx / ott. = 60 peliminuuttia kohden">Liiga<small>koko kausi</small></th>' : ''}</tr></thead>
+    <tbody>${rows}${compact ? '' : `<tr><th data-tip="Ottelut vanhimmasta uusimpaan\nW = voitto, L = tappio, · = ei ratkaisua\nVihreä = GSAx vähintään +0,5, punainen = enintään −0,5">Ottelut</th>${gks.map(p => `<td>${form(p)}</td>`).join('')}${lg ? '<td class="gkc-lg"></td>' : ''}</tr>`}</tbody></table></div>
+    <p class="muted small">${n ? `Kunkin maalivahdin ${n} viimeisintä omaa ottelua tältä kaudelta` : 'Koko kausi'}. Paras arvo korostettu. Voittolaukauskilpailu ei mukana torjunnoissa.</p>`;
+}
+
+// before: ISO time; only games before it count (rebuilt previews of played games)
+async function goalieCompareData(games, before = null) {
+  if (before) games = games.filter(g => g.start < before);
+  const lgGk = await getJSON(`/players/stats/summed/${SEASON}/${SEASON}/${TOURNAMENT}/true?dataType=basicStatsGk`).catch(() => []);
+  const tot = k => lgGk.reduce((a, x) => a + (x[k] || 0), 0);
+  const sv = tot('blockedOrSavedShots'), ga = tot('goalsAgainst'), toi = tot('timeOnIce'), xga = tot('expectedGoalsAgainst');
+  const lg = { sv: sv + ga ? sv / (sv + ga) : null, gaa: toi ? ga / toi * 3600 : null, gsaxGp: toi ? (xga - ga) / toi * 3600 : null };
+  // The league's decisions from each goalie's game log
+  const ids = [...new Set(games.flatMap(g => (g.goalies || []).filter(x => x.toi).map(x => x.id)))];
+  const decs = new Map();
+  await Promise.all(ids.map(id => getJSON(`/players/info/${id}/games/${SEASON}`).then(L => {
+    // The log records the 60-minute result: a game decided in overtime or the shootout is 'tied'. Its decision
+    // follows the game's final result (seen in SaiPa–K-Espoo 2–1 JA, 2026–27: Piiroinen won 0, tied 1).
+    for (const x of L.regular || []) if (x.won || x.lost || x.tied) decs.set(`${id}:${x.gameId}`, x.won ? 'W' : x.lost ? 'L' : 'T');
+  }).catch(() => {})));
+  return { logs: goalieLogs(games, decs).sort((a, b) => b.log.length - a.log.length), lgSv: lg.sv, lg };
+}
+
+function goalieCompareCard(el, data, { compact = false, title = 'Maalivahtivertailu' } = {}) {
+  const max = Math.max(0, ...data.logs.map(g => g.log.length));
+  const wins = GKC_WINDOWS.filter(n => n === 0 || n < max);
+  if (!wins.includes(GKC_N)) GKC_N = wins.includes(5) ? 5 : 0;
+  const draw = () => {
+    const gks = data.logs.map(g => goalieWindow(g, GKC_N, data.lgSv)).filter(g => g.gp);
+    el.querySelectorAll('.gkc-bar .sbtn').forEach(b => b.classList.toggle('active', Number(b.dataset.n) === GKC_N));
+    el.querySelector('.gkc-body').innerHTML = goalieCompareHtml(gks, GKC_N, compact, data.lg);
+  };
+  el.innerHTML = `<h2>${title}</h2>
+    <div class="setbar gkc-bar" role="tablist" aria-label="Otanta">${wins.map(n => `<button class="sbtn${compact ? ' sm' : ''}" data-n="${n}">${n ? `${n} viim.` : 'Koko kausi'}</button>`).join('')}</div>
+    <div class="gkc-body"></div>`;
+  el.querySelectorAll('.gkc-bar .sbtn').forEach(b => b.onclick = () => { GKC_N = Number(b.dataset.n); draw(); });
+  draw();
+}
+
+// Season view: SaiPa's played games as teamGame results
+async function renderGoalieCompare(el) {
+  const sched = await getJSON(`/schedule?tournament=${TOURNAMENT}&season=${SEASON}`);
+  const rows = sched.filter(g => g.ended && (teamNum(g.homeTeamId) === SAIPA_NUM || teamNum(g.awayTeamId) === SAIPA_NUM)).sort((a, b) => a.start.localeCompare(b.start));
+  const games = await Promise.all(rows.map(async r => {
+    const [g, st] = await Promise.all([getJSON(`/games/${SEASON}/${r.id}`), getJSON(`/games/stats/${SEASON}/${r.id}`)]);
+    return teamGame(g, st, SAIPA_NUM, r);
+  }));
+  goalieCompareCard(el, await goalieCompareData(games));
+}

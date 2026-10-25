@@ -1144,3 +1144,13 @@ a.lh-g:hover { border-color: var(--ink); }
 }
 /* ---------- hottest of the month ---------- */
 table.data tr.me td { background: var(--yellow-soft); }
+/* ---------- goalie comparison ---------- */
+table.gkc th small { display: block; font-weight: 400; font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; }
+table.gkc tbody th { text-align: left; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+table.gkc td { font-variant-numeric: tabular-nums; }
+table.gkc td small { color: var(--muted); }
+table.gkc td.gkc-best { background: var(--yellow); font-weight: 700; }
+table.gkc .gkc-lg { color: var(--muted); border-left: 1px solid var(--line); }
+.gkc-form { display: flex; flex-wrap: wrap; gap: 3px; min-width: 120px; }
+.gkc-form i { font-style: normal; font-size: 11px; font-weight: 700; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: #f0f0ec; color: var(--ink-2); }
+.gkc-form i.g { background: #d9f0dc; } .gkc-form i.b { background: #f6dcdc; }
