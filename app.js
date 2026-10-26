@@ -961,7 +961,7 @@ async function renderSeason() {
       <div class="card" id="lineCard"><h2>Ketjut ja parit</h2><p class="loading">Lasketaan…</p></div>
       <div class="card" id="leCard"><h2>Kokoonpanoeditori</h2><p class="loading">Ladataan…</p></div>`)}
       ${sec('mv', `
-      <div class="card" id="gkcCard"><h2>Maalivahtivertailu</h2><p class="loading">Lasketaan…</p></div>
+      <div class="card" id="gkcCard"><h2>Maalivahtivertailu</h2><p class="loading">Haetaan liigan kaikkien maalivahtien ottelut sijoituksia varten…</p></div>
       <div class="card" id="gkCard">
         <h2>Maalivahdit</h2>
         <div class="setbar" id="sgSets" role="tablist" aria-label="Maalivahtitilastot"></div>

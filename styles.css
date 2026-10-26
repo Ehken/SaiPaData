@@ -1154,3 +1154,7 @@ table.gkc .gkc-lg { color: var(--muted); border-left: 1px solid var(--line); }
 .gkc-form { display: flex; flex-wrap: wrap; gap: 3px; min-width: 120px; }
 .gkc-form i { font-style: normal; font-size: 11px; font-weight: 700; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: #f0f0ec; color: var(--ink-2); }
 .gkc-form i.g { background: #d9f0dc; } .gkc-form i.b { background: #f6dcdc; }
+.gkc-bar .gkc-per { margin-left: auto; }
+table.gkc .gkc-rk { font-size: 11px; color: var(--muted); font-weight: 500; }
+table.gkc thead th, table.gkc td { text-align: right; }
+table.gkc tbody th small { display: inline; margin-left: 4px; }
