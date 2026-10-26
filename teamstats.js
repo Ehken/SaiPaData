@@ -499,9 +499,9 @@ function goalieWindow(g, n, lgSv) {
 const minSec = s => { s = Math.round(s || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const GKC_ROWS = [
   { k: 'gp', l: 'PO', t: 'Games Played\nPelatut ottelut', v: p => p.gp, f: v => num(v, 0), hi: true, sub: p => p.gs !== p.gp ? `${p.gs} aloitusta` : '' },
-  { k: 'v', l: 'V', t: 'Wins\nVoitot varsinaisella peliajalla, Liigan kirjaus', v: p => p.v, f: v => num(v, 0), hi: true, pg: true },
-  { k: 't', l: 'T', t: 'Ties\nTasapelit 60 minuutin jälkeen (jatkoaika- ja voittolaukausottelut), Liigan kirjaus', v: p => p.t, f: v => num(v, 0), hi: null, pg: true },
-  { k: 'h', l: 'H', t: 'Losses\nTappiot varsinaisella peliajalla, Liigan kirjaus', v: p => p.h, f: v => num(v, 0), hi: false, pg: true },
+  { k: 'v', l: 'V', t: 'Wins\nVoitot varsinaisella peliajalla, Liigan kirjaus', v: p => p.v, f: (v, per) => num(v, per ? 2 : 0), hi: true, pg: true },
+  { k: 't', l: 'T', t: 'Ties\nTasapelit 60 minuutin jälkeen (jatkoaika- ja voittolaukausottelut), Liigan kirjaus', v: p => p.t, f: (v, per) => num(v, per ? 2 : 0), hi: null, pg: true },
+  { k: 'h', l: 'H', t: 'Losses\nTappiot varsinaisella peliajalla, Liigan kirjaus', v: p => p.h, f: (v, per) => num(v, per ? 2 : 0), hi: false, pg: true },
   { k: 'vPct', l: 'V%', t: 'Win Percentage\nVoittoprosentti kuten liiga.fi: (V + T/2) / PO', v: p => p.vPct, f: v => pct(v, 1), hi: true },
   { k: 'saves', l: 'TO', t: 'Saves\nTorjunnat', v: p => p.saves, f: (v, per) => num(v, per ? 1 : 0), hi: true, pg: true },
   { k: 'ga', l: 'PM', t: 'Goals Against\nPäästetyt maalit', v: p => p.ga, f: (v, per) => num(v, per ? 2 : 0), hi: false, pg: true },
@@ -551,7 +551,7 @@ function goalieCompareHtml(gks, ranks, n, per, compact = false) {
     const tip = `${fiDate(x.start)} vs ${x.opp}, ${x.gf}–${x.ga}${x.extra ? ' ' + x.extra : ''}\nTorjunnat\t${x.saves}/${x.saves + x.gaG} (${pct(sv, 1)})\nxGAE\t${signed(xgae, 2)}\nPeliaika\t${minSec(x.toi)}${x.started ? '' : '\nTuli kesken ottelun'}`;
     return `<i class="${xgae <= -0.5 ? 'g' : xgae >= 0.5 ? 'b' : ''}" data-tip="${esc(tip)}">${x.dec || '·'}</i>`;
   }).join('')}</div>`;
-  return `<div class="tablewrap"><table class="data gkc"><thead><tr><th></th>${gks.map(p => `<th>${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<small>${range(p)}</small></th>`).join('')}</tr></thead>
+  return `<div class="tablewrap"><table class="data gkc" style="width:min(100%, ${170 + gks.length * 210}px)"><thead><tr><th></th>${gks.map(p => `<th>${plink(p, `${esc(p.first)} ${esc(p.last)}`)}<small>${range(p)}</small></th>`).join('')}</tr></thead>
     <tbody>${rows}${compact ? '' : `<tr><th data-tip="Ottelut vanhimmasta uusimpaan, Liigan kirjaus\nV = voitto, T = tasan 60 minuutin jälkeen, H = tappio, · = ei ratkaisua\nVihreä = xGAE enintään −0,5, punainen = vähintään +0,5">Ottelut</th>${gks.map(p => `<td>${form(p)}</td>`).join('')}</tr>`}</tbody></table></div>
     <p class="muted small">${n ? `Kunkin maalivahdin ${n} viimeisintä omaa ottelua tältä kaudelta` : 'Koko kausi'}${per ? ', määrät ottelua kohden' : ''}. Suluissa sija liigan ${ranks ? ranks.n : ''} maalivahdin joukossa, joilla vähintään ${ranks ? ranks.min : '–'} ottelua samalla otannalla (1 = paras). Paras SaiPan arvo korostettu.</p>`;
 }
@@ -564,13 +564,18 @@ async function goalieCompareData(a = null, b = null) {
   return { ...L, logs: L.goalies.filter(g => g.team === SAIPA_NUM).sort((x, y) => y.log.length - x.log.length) };
 }
 
+// Fixed column order for the whole card: most games this season first, then ice time, then surname
+const GKC_ORDER = new Map();
 function goalieCompareCard(el, data, { compact = false, title = 'Maalivahtivertailu' } = {}) {
+  GKC_ORDER.clear();
+  [...data.logs].sort((x, y) => y.log.length - x.log.length || y.log.reduce((a, q) => a + q.toi, 0) - x.log.reduce((a, q) => a + q.toi, 0) || x.last.localeCompare(y.last, 'fi'))
+    .forEach((g, i) => GKC_ORDER.set(g.id, i));
   const max = Math.max(0, ...data.logs.map(g => g.log.length));
   const wins = GKC_WINDOWS.filter(n => n === 0 || n < max);
   if (!wins.includes(GKC_N)) GKC_N = wins.includes(5) ? 5 : 0;
   const draw = () => {
     const all = data.goalies.map(g => goalieWindow(g, GKC_N, data.lgSv)).filter(g => g.gp);
-    const gks = all.filter(g => g.team === SAIPA_NUM).sort((x, y) => y.gp - x.gp || y.toi - x.toi);
+    const gks = all.filter(g => g.team === SAIPA_NUM).sort((x, y) => (GKC_ORDER.get(x.id) ?? 99) - (GKC_ORDER.get(y.id) ?? 99));
     const ranks = gkcRanks(all, GKC_N, GKC_PER, data.teamGames);
     el.querySelectorAll('.gkc-bar .sbtn').forEach(b => b.classList.toggle('active', Number(b.dataset.n) === GKC_N));
     el.querySelectorAll('.gkc-per button').forEach(b => b.classList.toggle('on', (b.dataset.per === '1') === GKC_PER));

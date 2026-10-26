@@ -1145,16 +1145,20 @@ a.lh-g:hover { border-color: var(--ink); }
 /* ---------- hottest of the month ---------- */
 table.data tr.me td { background: var(--yellow-soft); }
 /* ---------- goalie comparison ---------- */
-table.gkc th small { display: block; font-weight: 400; font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; }
-table.gkc tbody th { text-align: left; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
-table.gkc td { font-variant-numeric: tabular-nums; }
+table.gkc { table-layout: fixed; }
+table.gkc thead th { text-align: center; vertical-align: bottom; padding-bottom: 8px; }
+table.gkc thead th:first-child { width: 150px; }
+table.gkc th small { display: block; font-weight: 400; font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; margin-top: 2px; }
+table.gkc tbody th { text-align: left; font-weight: 600; color: var(--ink); white-space: nowrap; font-size: 13px; }
+table.gkc tbody th small { display: inline; margin: 0 0 0 4px; font-weight: 400; }
+table.gkc td { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.gkc td b { display: inline-block; min-width: 52px; padding: 2px 8px; border-radius: 5px; font-weight: 600; }
+table.gkc td.gkc-best { background: none; }
+table.gkc td.gkc-best b { background: var(--yellow); font-weight: 800; }
 table.gkc td small { color: var(--muted); }
-table.gkc td.gkc-best { background: var(--yellow); font-weight: 700; }
-table.gkc .gkc-lg { color: var(--muted); border-left: 1px solid var(--line); }
-.gkc-form { display: flex; flex-wrap: wrap; gap: 3px; min-width: 120px; }
+table.gkc .gkc-rk { font-size: 11px; color: var(--muted); font-weight: 500; display: inline-block; min-width: 30px; text-align: left; }
+.gkc-bar .gkc-per { margin-left: auto; }
+.gkc-form { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
 .gkc-form i { font-style: normal; font-size: 11px; font-weight: 700; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: #f0f0ec; color: var(--ink-2); }
 .gkc-form i.g { background: #d9f0dc; } .gkc-form i.b { background: #f6dcdc; }
-.gkc-bar .gkc-per { margin-left: auto; }
-table.gkc .gkc-rk { font-size: 11px; color: var(--muted); font-weight: 500; }
-table.gkc thead th, table.gkc td { text-align: right; }
-table.gkc tbody th small { display: inline; margin-left: 4px; }
+@media (max-width: 480px) { table.gkc thead th:first-child { width: 92px; } table.gkc td b { min-width: 0; padding: 2px 4px; } }
