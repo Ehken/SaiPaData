@@ -303,6 +303,7 @@ async function monthStats(games) {
       if (!st) continue;
       for (const side of ['home', 'away']) {
         const sideTid = teamNum(side === 'home' ? r.homeTeamId : r.awayTeamId);
+        const inNet = new Map();   // goalies of this side in this game: id -> goals against
         for (const p of st[`${side}Team`] || []) {
           if ((p.period || 0) > 4) continue;
           // Each stats row names its own team; the schedule side is only a fallback
@@ -318,8 +319,11 @@ async function monthStats(games) {
             if (!q.timeofice) continue;
             const t = gk.get(x.playerId) || gk.set(x.playerId, { id: x.playerId, team: tid, games: new Set(), toi: 0, saves: 0, ga: 0, xga: 0 }).get(x.playerId);
             t.team = tid; t.toi += q.timeofice; t.saves += q.saves || 0; t.ga += q.goalsAllowed || 0; t.xga += x.expectedGoalsAgainst || 0; t.games.add(r.id);
+            inNet.set(x.playerId, (inNet.get(x.playerId) || 0) + (q.goalsAllowed || 0));
           }
         }
+        // Shutout: the only goalie of his team in the game, no goals against (the shootout does not count)
+        if (inNet.size === 1) { const [[id, ga]] = inNet; if (!ga) gk.get(id).so = (gk.get(id).so || 0) + 1; }
       }
     }
   };
@@ -372,6 +376,7 @@ async function renderMonthHot(el) {
         { k: 'sv', l: 'SV%', t: 'Save Percentage\nTorjuntaprosentti', f: p => `<b>${pct(p.sv, 1)}</b>`, s: p => p.sv ?? -1 },
         { k: 'gsax', l: 'GSAx', t: 'Goals Saved Above Expected\nTorjutut maalit yli odotusten', f: p => signed(p.gsax, 2), s: p => p.gsax },
         n0('gaa', 'GAA', 'Goals Against Average\nPäästetyt maalit 60 minuuttia kohden', 2),
+        { k: 'so', l: 'NP', t: 'Shutouts\nNollapelit: koko ottelu ilman päästettyjä maaleja (voittolaukauskilpailu ei mukana)', f: p => num(p.so || 0, 0), s: p => p.so || 0 },
         n0('saves', 'SV', 'Saves\nTorjunnat'), n0('sa', 'SA', 'Shots Against\nLaukaukset maalia kohti'),
       ], 'sv', p => p.team === SAIPA_NUM ? 'me' : '');
     } catch (e) { body.innerHTML = `<p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }
@@ -397,6 +402,7 @@ async function renderMonthHot(el) {
       ['📊', 'Paras pistetahti', 'P/GP', sk.filter(p => p.gp >= 3).sort((a, b) => b.ppg - a.ppg || b.pts - a.pts), p => num(p.ppg, 2), p => `${p.pts} P · ${p.gp} ottelua`],
       ['➕', 'Paras plusmiinus', '+/-', [...sk].sort((a, b) => b.pm - a.pm || b.pts - a.pts), p => signed(p.pm, 0), p => `${p.gp} ottelua`],
       ['🧤', 'Paras torjuntaprosentti', 'SV%', [...gk].sort((a, b) => b.sv - a.sv), p => pct(p.sv, 1), p => `${p.gp} ottelua · GSAx ${signed(p.gsax, 1)}`],
+      ['🚫', 'Eniten nollapelejä', 'NP', gk.filter(p => p.so).sort((a, b) => b.so - a.so || b.sv - a.sv), p => p.so, p => `${p.gp} ottelua · SV% ${pct(p.sv, 1)}`],
       ['🧱', 'Eniten torjuttu yli odotusten', 'GSAx', [...gk].sort((a, b) => b.gsax - a.gsax), p => signed(p.gsax, 2), p => `${p.gp} ottelua · SV% ${pct(p.sv, 1)}`],
     ].filter(t => t[3].length).map(([ic, k, unit, list, val, sub]) => {
       const p = list[0];
