@@ -159,6 +159,8 @@ const GM_ROWS = [
   ['Maalipaikat', [
     { l: 'xG', k: 'xgf', f: v => num(v, 2), hi: true, d: 'Maaliodottama', sk: 'xgfpg' },
     { l: 'xG-osuus', k: 'xgShare', f: v => pct(v, 1), hi: true, d: 'Osuus ottelun maaliodottamasta', sk: 'xgShare' },
+    { l: 'Oma xG', k: 'oxgf', f: v => num(v, 2), hi: true, d: 'Maaliodottama SaiPa-datan omalla mallilla (etäisyys, kulma, rebound, nopea hyökkäys, pelitilanne). Liigan xG yllä' },
+    { l: 'Oma xG-osuus', k: 'oxgShare', f: v => pct(v, 1), hi: true, d: 'Osuus ottelun maaliodottamasta omalla mallilla' },
     { l: 'xG 5 v 5', k: 'evXg', f: v => num(v, 2), hi: true, d: 'Maaliodottama tasakentällisin (5 v 5)' },
     { l: 'Laukausosuus 5 v 5', k: 'evAtt', f: v => pct(v, 1), hi: true, d: 'Laukausyritysten osuus tasakentällisin (5 v 5)', sk: 'evAtt', t: s => `${s.evF}–${s.evA} yritystä` },
     { l: 'Laukaukset maalin edestä', k: 'hd', f: v => num(v, 0), hi: true, d: 'Laukausyritykset maalin edustalta (NHL:n High-Danger: enintään 8,8 m maalin keskeltä)', t: s => `joista maaleja ${s.hdG}` },
@@ -216,7 +218,7 @@ function gameSideMetrics(g, st, sm, tid, d) {
   // Shot map: rows of both teams, the shootout left out
   const S = (sm || []).filter(s => (s.period || 0) <= 4).map(normShot);
   const mine = S.filter(s => Number(s.shootingTeamId) === tid), theirs = S.filter(s => Number(s.shootingTeamId) !== tid);
-  const xs = a => a.reduce((s, x) => s + (x.xg || 0), 0);
+  const xs = a => a.reduce((s, x) => s + (x.xg || 0), 0), oxs = a => a.reduce((s, x) => s + (x.oxg || 0), 0);
   const ev = s => s.ownTeamPlayersOnIce === 6 && s.otherTeamPlayersOnIce === 6;
   const hd = mine.filter(s => s.zone === 'slot');
   const evF = mine.filter(ev).length, evA = theirs.filter(ev).length;
@@ -241,6 +243,7 @@ function gameSideMetrics(g, st, sm, tid, d) {
     miss: mine.filter(s => s.eventType === 'MISSED' || s.eventType === 'MISS').length,
     blkd: mine.filter(s => s.eventType === 'PLAYER_BLOCKED').length, blk: theirs.filter(s => s.eventType === 'PLAYER_BLOCKED').length,
     xgf, xgShare: (xgf + xga) ? xgf / (xgf + xga) : null, evXg: xs(mine.filter(ev)),
+    oxgf: mine.some(s => s.oxg != null) ? oxs(mine) : null, oxgShare: mine.concat(theirs).some(s => s.oxg != null) ? ratio(oxs(mine), oxs(mine) + oxs(theirs)) : null,
     evAtt: ratio(evF, evF + evA), evF, evA,
     hd: hd.length, hdG: hd.filter(s => s.goal).length, hdXg: xs(hd),
     reb: mine.filter(s => s.reb).length, rebG: mine.filter(s => s.reb && s.goal).length,
@@ -260,6 +263,7 @@ let GM_LEAGUE = null, GM_LEAGUE_P = null;
 // d = reportData(...): goals without the shootout winner
 function gameMetricsCard(g, st, sm, d) {
   if (Array.isArray(sm) && sm.some(s => s.reb === undefined)) shotContext(sm, g);   // live data comes without rebound/rush flags
+  if (typeof annotateOwnXg === 'function') annotateOwnXg(sm, g);
   const F = d.F, O = teamNum(d.O.teamId);
   const a = gameSideMetrics(g, st, sm, F, d), b = gameSideMetrics(g, st, sm, O, d);
   const sai = { id: F, name: d.S.teamName, logo: null }, opp = { id: O, name: d.O.teamName, logo: null };

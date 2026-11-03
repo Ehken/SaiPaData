@@ -5,20 +5,21 @@
  * Splits: score state (leading / tied / trailing), manpower (5 v 5, power play, penalty kill, 4 v 4 and 3 v 3,
  * own net empty, opponent's net empty) and game phase (first 10 minutes, 10–50, last 10 minutes, each period, overtime).
  *
+ * Two xG columns: the league's own xG (per shot from 2025–26) and the site's own model (xgmodel.js, "oma xG").
+ *
  * Score- and venue-adjusted (sa) numbers, 5 v 5 only: a trailing team shoots more and a leading team less, so each
  * attempt is weighted by how much the league's teams shoot in that score state at home or away
  * (Tulsky / Evolving-Hockey method): weight = league average share / share in that state. Coefficients from the
  * league's own shot maps:
  *   SA_CF: shot attempts, regular seasons 2015–16 to 2025–26 (2017–18 has almost no shot maps), 4 368 games
- *   SA_XG: expected goals, 2025–26 (the first season with xG on every shot), 480 games
+ *   xG: the own model's XG_SA (xgmodel.js), 2015–16 to 2024–25, applied to the own model's xG
  * Score state = home goals minus away goals before the shot, capped at ±2. [home weight, away weight].
  * Check (split-half test, 152 team seasons): first-half 5 v 5 attempt share predicts second-half points per game with
- * r = 0.48 raw and r = 0.54 score-adjusted, as well as points per game (0.54). For xG there is one season only
- * (16 teams): raw and adjusted both r = 0.55. Score effects are smaller in xG than in attempts (trailing teams shoot
- * more but from worse spots), so the xG adjustment is small.
+ * r = 0.48 raw and r = 0.54 score-adjusted, as well as points per game (0.54). Own xG% in all situations: r = 0.57,
+ * the best of all; own 5v5 xG% 0.51 raw, 0.53 adjusted. Score effects are smaller in xG than in attempts (trailing
+ * teams shoot more but from worse spots), so the xG adjustment is small.
  */
 const SA_CF = { '-2': [0.885, 1.157], '-1': [0.919, 1.102], 0: [0.991, 1.010], 1: [1.083, 0.925], 2: [1.134, 0.890] };
-const SA_XG = { '-2': [0.952, 1.056], '-1': [0.963, 1.042], 0: [0.986, 1.016], 1: [1.014, 0.986], 2: [1.086, 0.923] };
 const scoreBin = d => String(Math.max(-2, Math.min(2, d)));
 
 const SIT_ST = { lead: 'Johdossa', tied: 'Tasan', trail: 'Tappiolla' };
@@ -26,7 +27,7 @@ const SIT_MP = { ev: '5 v 5', pp: 'Ylivoima', pk: 'Alivoima', even: '4 v 4 / 3 v
 const SIT_PH = { early: '0–10 min', mid: '10–50 min', late: '50–60 min', p1: '1. erä', p2: '2. erä', p3: '3. erä', ot: 'Jatkoaika' };
 
 function blankSit() {
-  const z = () => ({ xf: 0, xa: 0, cf: 0, ca: 0, gf: 0, ga: 0, toi: 0 });
+  const z = () => ({ xf: 0, xa: 0, ox: 0, oxa: 0, cf: 0, ca: 0, gf: 0, ga: 0, toi: 0 });
   const o = { gp: 0, all: z(), ev: z(), sa: { cf: 0, ca: 0, xf: 0, xa: 0 } };
   for (const k of [...Object.keys(SIT_ST), ...Object.keys(SIT_MP), ...Object.keys(SIT_PH)]) o[k] = z();
   return o;
@@ -34,6 +35,7 @@ function blankSit() {
 
 // One game for both teams. sm = cleaned shot map rows, g = the game's data (goals and empty-net intervals).
 function sitGame(sm, g, T) {
+  if (typeof annotateOwnXg === 'function') annotateOwnXg(sm, g);
   const G = g.game, ids = [teamNum(G.homeTeam.teamId), teamNum(G.awayTeamId ?? G.awayTeam.teamId)];
   const [h, a] = ids;
   const goals = [...(G.homeTeam.goalEvents || []).filter(validGoal).map(e => ({ t: e.gameTime, d: 1 })), ...(G.awayTeam.goalEvents || []).filter(validGoal).map(e => ({ t: e.gameTime, d: -1 }))]
@@ -57,7 +59,7 @@ function sitGame(sm, g, T) {
   for (const s of sm || []) {
     if ((s.period || 0) > 4) continue;
     const homeShot = teamNum(s.shootingTeamId) === h, F = homeShot ? H : A, O = homeShot ? A : H;
-    const t = s.gameTime || 0, xg = s.xg || 0, goal = s.eventType === 'GOAL';
+    const t = s.gameTime || 0, xg = s.xg || 0, ox = s.oxg || 0, goal = s.eventType === 'GOAL';
     const dHome = diffAt(t), d = homeShot ? dHome : -dHome;
     const keys = ['all', d > 0 ? 'lead' : d < 0 ? 'trail' : 'tied',
       t < 600 ? 'early' : t < 3000 ? 'mid' : t < 3600 ? 'late' : 'ot', t >= 3600 ? null : t < 1200 ? 'p1' : t < 2400 ? 'p2' : 'p3'];
@@ -68,12 +70,12 @@ function sitGame(sm, g, T) {
     // The other team sees the same shot from the other side: its manpower key is the mirror
     const mirror = { enOpp: 'enOwn', enOwn: 'enOpp', pp: 'pk', pk: 'pp', ev: 'ev', even: 'even' };
     const oKeys = keys.map(k => k === 'lead' ? 'trail' : k === 'trail' ? 'lead' : k === mp ? mirror[mp] : k);
-    for (const k of keys.filter(Boolean)) { F[k].xf += xg; F[k].cf++; if (goal) F[k].gf++; }
-    for (const k of oKeys.filter(Boolean)) { O[k].xa += xg; O[k].ca++; if (goal) O[k].ga++; }
+    for (const k of keys.filter(Boolean)) { F[k].xf += xg; F[k].ox += ox; F[k].cf++; if (goal) F[k].gf++; }
+    for (const k of oKeys.filter(Boolean)) { O[k].xa += xg; O[k].oxa += ox; O[k].ca++; if (goal) O[k].ga++; }
     if (mp === 'ev') {
       const w = homeShot ? 0 : 1, b = scoreBin(dHome);
-      const wc = SA_CF[b][w], wx = SA_XG[b][w];
-      F.sa.cf += wc; F.sa.xf += xg * wx; O.sa.ca += wc; O.sa.xa += xg * wx;
+      const wc = SA_CF[b][w], wx = XG_SA[b][w];
+      F.sa.cf += wc; F.sa.xf += ox * wx; O.sa.ca += wc; O.sa.xa += ox * wx;
     }
   }
 }
@@ -106,9 +108,11 @@ const per60 = (v, toi) => toi ? v / toi * 3600 : null;
 const SIT_SETS = [
   ['yht', 'Yhteenveto', t => [
     { k: 'gp', l: 'GP', t: 'Games Played\nOttelut, joista laukauskartta', v: t.gp, f: v => num(v, 0) },
-    { k: 'xg', l: 'xG%', t: 'Expected Goals For %\nOsuus ottelun maaliodottamasta, kaikki pelitilanteet', v: shr(t.all.xf, t.all.xa), f: v => pct(v, 1), heat: true },
-    { k: 'evxg', l: 'xG% 5v5', t: 'Expected Goals For %, 5 on 5\nOsuus maaliodottamasta tasakentällisin', v: shr(t.ev.xf, t.ev.xa), f: v => pct(v, 1), heat: true },
-    { k: 'saxg', l: 'sa-xG% 5v5', t: 'Score- and Venue-Adjusted xG%, 5 on 5\nPelitilannekorjattu: johdossa ja tappiolla syntyneet maalipaikat painotettu liigan keskimääräisellä tilanne-erolla, myös koti/vieras', v: shr(t.sa.xf, t.sa.xa), f: v => pct(v, 1), heat: true },
+    { k: 'xg', l: 'xG%', t: 'Expected Goals For %\nOsuus ottelun maaliodottamasta, kaikki pelitilanteet (Liigan xG)', v: shr(t.all.xf, t.all.xa), f: v => pct(v, 1), heat: true },
+    { k: 'oxg', l: 'Oma xG%', t: 'Expected Goals For %, own model\nOsuus maaliodottamasta SaiPa-datan omalla mallilla, kaikki pelitilanteet', v: shr(t.all.ox, t.all.oxa), f: v => pct(v, 1), heat: true },
+    { k: 'evxg', l: 'xG% 5v5', t: 'Expected Goals For %, 5 on 5\nOsuus maaliodottamasta tasakentällisin (Liigan xG)', v: shr(t.ev.xf, t.ev.xa), f: v => pct(v, 1), heat: true },
+    { k: 'evoxg', l: 'Oma xG% 5v5', t: 'Expected Goals For %, 5 on 5, own model\nOsuus maaliodottamasta tasakentällisin, oma malli', v: shr(t.ev.ox, t.ev.oxa), f: v => pct(v, 1), heat: true },
+    { k: 'saxg', l: 'sa-xG% 5v5', t: 'Score- and Venue-Adjusted xG%, 5 on 5\nPelitilannekorjattu oman mallin xG: johdossa ja tappiolla syntyneet maalipaikat painotettu liigan keskimääräisellä tilanne-erolla kymmeneltä kaudelta, myös koti/vieras', v: shr(t.sa.xf, t.sa.xa), f: v => pct(v, 1), heat: true },
     { k: 'evcf', l: 'CF% 5v5', t: 'Corsi For %, 5 on 5\nLaukausyritysten osuus tasakentällisin', v: shr(t.ev.cf, t.ev.ca), f: v => pct(v, 1), heat: true },
     { k: 'sacf', l: 'sa-CF% 5v5', t: 'Score- and Venue-Adjusted Corsi For %, 5 on 5\nPelitilannekorjattu laukausyritysten osuus', v: shr(t.sa.cf, t.sa.ca), f: v => pct(v, 1), heat: true },
     { k: 'gd', l: 'G−xG', t: 'Goals minus Expected Goals, net\nMaaliero miinus odotettu maaliero, kaikki pelitilanteet', v: (t.all.gf - t.all.ga) - (t.all.xf - t.all.xa), f: v => signed(v, 1) },
@@ -150,7 +154,7 @@ async function renderSituations(el) {
   el.innerHTML = `<h2>Maalipaikat pelitilanteittain <span class="h2-sub">koko liiga</span></h2>
     <div class="setbar sit-bar" role="tablist" aria-label="Näkymä">${SIT_SETS.map(([k, l]) => `<button class="sbtn" data-k="${k}">${l}</button>`).join('')}</div>
     <div class="tablewrap sit-tab"></div>
-    <p class="muted small">Liigan laukauskartoista ${D.games - D.missing}/${D.games} ottelua. 5 v 5 = molemmilla viisi kenttäpelaajaa ja maalivahti. Pelitilannekorjattu (sa) painottaa 5 v 5 -laukaukset sen mukaan, paljonko joukkueet keskimäärin laukovat johdossa, tasan ja tappiolla kotona ja vieraissa: tappiolla laukotaan enemmän, joten kirittävän joukkueen lukuja lasketaan ja johtavan nostetaan. Kertoimet Liigan omasta datasta, menetelmä Mittarit-sivulla. Shootout ei mukana. SaiPa korostettu.</p>`;
+    <p class="muted small">Liigan laukauskartoista ${D.games - D.missing}/${D.games} ottelua. 5 v 5 = molemmilla viisi kenttäpelaajaa ja maalivahti. Pelitilannekorjattu (sa) painottaa 5 v 5 -laukaukset sen mukaan, paljonko joukkueet keskimäärin laukovat johdossa, tasan ja tappiolla kotona ja vieraissa: tappiolla laukotaan enemmän, joten kirittävän joukkueen lukuja lasketaan ja johtavan nostetaan. Kertoimet Liigan omasta datasta. xG = Liigan oma xG, oma xG = SaiPa-datan malli; menetelmät Mittarit-sivulla. Shootout ei mukana. SaiPa korostettu.</p>`;
   el.querySelectorAll('.sit-bar .sbtn').forEach(b => b.onclick = () => { SIT_SET = b.dataset.k; draw(); });
   draw();
 }

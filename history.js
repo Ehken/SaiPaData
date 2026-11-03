@@ -121,8 +121,10 @@ async function renderHistory() {
   box.innerHTML = `
     <div class="card" id="todayCard"><h2><span class="tag">Tällä päivämäärällä</span></h2><p class="loading">Haetaan otteluhistoriaa…</p></div>
     <div class="card" id="alltimeCard"><h2>Kaikkien aikojen SaiPa</h2><p class="loading">Lasketaan…</p></div>
+    <div class="card" id="xgHistCard"><h2>Maalipaikat kausittain</h2><p class="loading">Lasketaan…</p></div>
     <div class="card" id="attCard"><h2>Yleisömäärät</h2><p class="loading">Haetaan…</p></div>`;
   const put = (sel, title, html) => { const el = $(sel); if (el) el.innerHTML = `<h2>${title}</h2>${html}`; };
+  try { put('#xgHistCard', 'Maalipaikat kausittain', xgHistoryHtml()); drawXgHistory($('#xgHistCard')); } catch (e) { put('#xgHistCard', 'Maalipaikat kausittain', `<p class="neg-num">${esc(e.message)}</p>`); }
   allTimeWithCurrent().then(x => put('#alltimeCard', 'Kaikkien aikojen SaiPa', allTimeHtml(x.rows)))
     .catch(e => put('#alltimeCard', 'Kaikkien aikojen SaiPa', `<p class="neg-num">${esc(e.message)}</p>`));
   try {
@@ -257,4 +259,61 @@ Kotiottelut	${s.n}</title></rect>
     </div>
     <h3>Suurimmat kotiyleisöt</h3><ol class="toplist dated">${record.map(g => `<li><span class="tl-r">${new Date(g.start).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'Europe/Helsinki' })}</span><span class="tl-n">SaiPa–${esc(g.opp)} ${g.gf}–${g.ga}${sfx(g.ft)}</span><b>${g.spect.toLocaleString('fi-FI')}</b></li>`).join('')}</ol>
     <p class="muted small">Liigan runkosarjan kotiottelut, joista yleisömäärä on kirjattu. Lähde: liiga.fi:n otteluohjelma.</p>`;
+}
+
+/* ---------- XG-1: expected goals by season (own model), SaiPa and the league ---------- */
+// Data: data/xg-history.js (XG_HIST), built once from the league's shot maps with xgmodel.js.
+let XGH_SEASON = null;
+function xgHistRows() {
+  if (typeof XG_HIST === 'undefined') return [];
+  const sh = (a, b) => (a + b) ? a / (a + b) : null;
+  const rows = XG_HIST.rows.map(r => {
+    const [y, id, gpAll, gp, gf, ga, pts, xf, xa, ef, ea, sf, sa, cf, ca, gfD, gaD] = r;
+    return { y, id, name: XG_HIST.names[id] || '?', gpAll, gp, gf, ga, pts, ppg: pts / gpAll,
+      xg: sh(xf, xa), ev: sh(ef, ea), sa: sh(sf, sa), cf: sh(cf, ca), gp_: sh(gf, ga), fin: (gfD - gaD) - (xf - xa), finPg: gp ? ((gfD - gaD) - (xf - xa)) / gp : null };
+  });
+  // Ranks within each season (1 = best)
+  const keys = ['ppg', 'xg', 'ev', 'sa', 'cf', 'gp_', 'fin'];
+  for (const y of new Set(rows.map(r => r.y))) {
+    const S = rows.filter(r => r.y === y);
+    for (const k of keys) { const v = [...S].sort((a, b) => b[k] - a[k]); for (const r of S) { r.r = r.r || {}; r.r[k] = 1 + v.findIndex(x => x[k] === r[k]); } }
+    for (const r of S) r.n = S.length;
+  }
+  return rows;
+}
+const seasonLbl = y => `${y - 1}–${String(y).slice(2)}`;
+function xgHistoryHtml() {
+  const rows = xgHistRows();
+  if (!rows.length) return '<p class="muted">Ei dataa.</p>';
+  return `<p class="muted small">Maalipaikat SaiPa-datan omalla xG-mallilla (Liigan oma xG on laukauskohtaisena vasta kaudesta 2025–26). Kausi 2017–18 puuttuu: siltä ei ole laukauskarttoja. Suluissa sija liigassa kyseisellä kaudella.</p>
+    <h3>SaiPa kausittain</h3><div class="tablewrap" id="xghSaipa"></div>
+    <h3>Koko liiga</h3><div class="setbar" id="xghSeasons" role="tablist" aria-label="Kausi"></div><div class="tablewrap" id="xghLeague"></div>
+    <p class="muted small">xG% = osuus maaliodottamasta kaikissa pelitilanteissa. sa-xG% 5v5 = pelitilannekorjattu (johto, tappio, koti/vieras). G−xG/ott. = maaliero miinus odotettu maaliero ottelua kohden: plus = viimeistely ja maalivahdit yli odotusten. Kausien 2018–19 ja 2024–25 laukauskartoista puuttuu osa otteluista: maalipaikat niistä otteluista, joista kartta on (GP).</p>`;
+}
+function drawXgHistory(el) {
+  const rows = xgHistRows();
+  if (!rows.length) return;
+  const rk = (r, k, txt) => `${txt} <small class="muted">(${r.r[k]}.)</small>`;
+  const cols = [
+    { k: 'gp', l: 'GP', t: 'Games Played\nOttelut, joista laukauskartta (kaikki ottelut hoverissa)', f: r => `<span data-tip="${r.gpAll} ottelua yhteensä">${r.gp}</span>`, s: r => r.gp },
+    { k: 'ppg', l: 'P/GP', t: 'Points per Game\nPisteet ottelua kohden (3–2–1–0)', f: r => rk(r, 'ppg', num(r.ppg, 2)), s: r => r.ppg },
+    { k: 'xg', l: 'xG%', t: 'Expected Goals For %\nOsuus maaliodottamasta, kaikki pelitilanteet, oma malli', f: r => rk(r, 'xg', pct(r.xg, 1)), s: r => r.xg, heat: true },
+    { k: 'ev', l: 'xG% 5v5', t: 'Expected Goals For %, 5 on 5\nTasakentällisin, oma malli', f: r => rk(r, 'ev', pct(r.ev, 1)), s: r => r.ev, heat: true },
+    { k: 'sa', l: 'sa-xG% 5v5', t: 'Score- and Venue-Adjusted xG%, 5 on 5\nPelitilannekorjattu, oma malli', f: r => rk(r, 'sa', pct(r.sa, 1)), s: r => r.sa, heat: true },
+    { k: 'cf', l: 'CF% 5v5', t: 'Corsi For %, 5 on 5\nLaukausyritysten osuus tasakentällisin', f: r => rk(r, 'cf', pct(r.cf, 1)), s: r => r.cf, heat: true },
+    { k: 'gp_', l: 'GF%', t: 'Goals For %\nMaaliosuus, kaikki ottelut', f: r => rk(r, 'gp_', pct(r.gp_, 1)), s: r => r.gp_, heat: true },
+    { k: 'fin', l: 'G−xG/ott.', t: 'Goal Differential minus Expected, per Game\nMaaliero miinus odotettu maaliero ottelua kohden', f: r => rk(r, 'fin', signed(r.finPg, 2)), s: r => r.finPg },
+  ];
+  const sai = rows.filter(r => r.id === SAIPA_NUM).sort((a, b) => b.y - a.y);
+  sortableTable(el.querySelector('#xghSaipa'), sai, [{ k: 'y', l: 'Kausi', f: r => seasonLbl(r.y), s: r => r.y }, ...cols], 'y');
+  const seasons = [...new Set(rows.map(r => r.y))].sort((a, b) => b - a);
+  if (!seasons.includes(XGH_SEASON)) XGH_SEASON = seasons[0];
+  const bar = el.querySelector('#xghSeasons');
+  bar.innerHTML = seasons.map(y => `<button class="sbtn sm" data-y="${y}">${seasonLbl(y)}</button>`).join('');
+  const drawLeague = () => {
+    bar.querySelectorAll('.sbtn').forEach(b => b.classList.toggle('active', Number(b.dataset.y) === XGH_SEASON));
+    sortableTable(el.querySelector('#xghLeague'), rows.filter(r => r.y === XGH_SEASON), [{ k: 'name', l: 'Joukkue', f: r => esc(r.name), s: r => r.name }, ...cols], 'xg', r => r.id === SAIPA_NUM ? 'me' : '');
+  };
+  bar.querySelectorAll('.sbtn').forEach(b => b.onclick = () => { XGH_SEASON = Number(b.dataset.y); drawLeague(); });
+  drawLeague();
 }
