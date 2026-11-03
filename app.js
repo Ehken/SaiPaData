@@ -976,6 +976,7 @@ async function renderSeason() {
       <div class="card" id="dsvCard"><h2>Sarjataulukko maalipaikkojen mukaan</h2><p class="loading">Lasketaan odotettuja pisteitä…</p></div>`)}
       ${sec('liiga', `
       <div class="card" id="fcTableCard"><h2>Sarjaennuste</h2><p class="loading">Simuloidaan loppukautta…</p></div>
+      <div class="card" id="sitCard"><h2>Maalipaikat pelitilanteittain</h2><p class="loading">Haetaan koko liigan laukauskartat…</p></div>
       <div class="card" id="monthCard"><h2>Kuukauden kuumimmat</h2><p class="loading">Haetaan liigan otteluita…</p></div>
       <div class="card" id="topCard"><h2>Liigan nopeimmat ja kovimmat</h2><p class="loading">Haetaan liigan tilastoja…</p></div>`)}`;
 
@@ -993,7 +994,7 @@ async function renderSeason() {
     drawSeasonSkaters(sk, team);
     { const el = $('#leCard'); if (el) { if (typeof renderLineupEditor === 'function') renderLineupEditor(el, sk).catch(e => { el.innerHTML = `<h2>Kokoonpanoeditori</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }); else el.remove(); } }
     drawSeasonGoalies(gks, null);
-    for (const [sel, title, fn] of [['#tmCard', 'Joukkueen tunnusluvut', 'renderTeamMetrics'], ['#monthCard', 'Kuukauden kuumimmat', 'renderMonthHot'], ['#gkcCard', 'Maalivahtivertailu', 'renderGoalieCompare']]) {
+    for (const [sel, title, fn] of [['#tmCard', 'Joukkueen tunnusluvut', 'renderTeamMetrics'], ['#monthCard', 'Kuukauden kuumimmat', 'renderMonthHot'], ['#gkcCard', 'Maalivahtivertailu', 'renderGoalieCompare'], ['#sitCard', 'Maalipaikat pelitilanteittain', 'renderSituations']]) {
       const el = $(sel);
       if (el && typeof window[fn] === 'function') whenVisible(el, () => window[fn](el).catch(e => { el.innerHTML = `<h2>${title}</h2><p class="neg-num">Lataus epäonnistui: ${esc(e.message)}</p>`; }));
       else if (el) el.remove();

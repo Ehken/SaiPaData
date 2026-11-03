@@ -127,6 +127,9 @@
       <p>Liiga ei julkaise laukauskarttaa jokaisesta ottelusta. Siksi karttaan perustuvat luvut (Mistä maalit syntyvät, maalivahtien alueittaiset torjuntaprosentit, MS ja SB) voivat olla pienempiä kuin viralliset tilastot. Kartan kattavuus kerrotaan aina luvun vieressä.</p>
       <p><b>Liigasta poikkeaa</b> nimeää alueen, jonka osuus joukkueen maaleista poikkeaa selvimmin liigan osuudesta.</p>
 
+      <h3>Pelitilannekorjattu xG (sa-xG)</h3>
+      <p>Tappiolla oleva joukkue painostaa ja laukoo enemmän, johtava puolustaa. Siksi pelkkä xG-osuus suosii joukkueita, jotka ovat olleet paljon tappiolla. Pelitilannekorjattu luku (score- and venue-adjusted, menetelmä Tulsky / Evolving-Hockey) painottaa jokaisen 5 v 5 -laukauksen sen mukaan, paljonko liigan joukkueet keskimäärin laukovat kyseisessä maalitilanteessa (tappiolla 2+, 1, tasan, johdossa 1, 2+) kotona tai vieraissa: paino = liigan keskimääräinen osuus / osuus siinä tilanteessa. Laukausyritysten kertoimet on laskettu Liigan laukauskartoista kausilta 2015–16 – 2025–26 (4 368 ottelua), xG:n kertoimet kaudelta 2025–26, ensimmäiseltä kaudelta, jolta jokaisella laukauksella on xG.</p>
+      <p>Toimiiko korjaus Liigassa? Testi 152 joukkuekaudesta: kauden ensimmäisen puoliskon 5 v 5 -laukausosuus ennustaa toisen puoliskon pistetahtia korrelaatiolla 0,48, pelitilannekorjattuna 0,54 (yhtä hyvin kuin ensimmäisen puoliskon pistetahti). xG:llä vertailu on vain yhdeltä kaudelta (16 joukkuetta), eikä korjaus muuttanut ennustekykyä (0,55 molemmilla). Maalitilanne vaikuttaa xG:hen vähemmän kuin laukausmääriin, koska kirittävä joukkue laukoo enemmän mutta huonommista paikoista.</p>
       <h3>Odotetut pisteet (xPTS)</h3>
       <p>Liigan oma odotettujen pisteiden kenttä on tyhjä, joten ne lasketaan itse. Kummankin joukkueen maalimäärää mallinnetaan Poisson-jakaumalla, jonka keskiarvo on joukkueen xG ottelussa. Varsinaisen peliajan voitto tuo 3 pistettä ja tasapeli 1,5 pistettä kummallekin. Näistä lasketaan sarjataulukko maalipaikkojen mukaan.</p>
 
@@ -156,6 +159,7 @@
 <script src="attendance.js?v=dev"></script>
 <script src="preview.js?v=dev"></script>
 <script src="teamstats.js?v=dev"></script>
+<script src="situations.js?v=dev"></script>
 <script src="lineup.js?v=dev"></script>  <!-- optional lineup editor: delete this line and lineup.js to remove -->
 <script src="live.js?v=dev"></script>  <!-- optional live view: delete this line and live.js to remove -->
 </body>
