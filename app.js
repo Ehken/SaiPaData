@@ -222,6 +222,22 @@ const focusNum = g => {
   const h = teamNum(g.game.homeTeam.teamId), a = teamNum(g.game.awayTeam.teamId);
   return h === SAIPA_NUM || a === SAIPA_NUM ? SAIPA_NUM : h;
 };
+// Team colours [primary, secondary], keyed by a lower-case part of the team name. Used where two teams are shown
+// side by side (live view, win-probability chart, team switches). When the two teams' primaries are too close,
+// the away team takes its secondary colour.
+const TEAM_COLORS = [
+  ['saipa', '#F5C400', '#1A1A1A'], ['kärpät', '#1A1A1A', '#F2B705'], ['kalpa', '#3B3B3B', '#E8B400'], ['hifk', '#D0102E', '#0B2A5B'],
+  ['hpk', '#F47920', '#1A1A1A'], ['ilves', '#00843D', '#F2C200'], ['jukurit', '#0C2C5C', '#D2232A'], ['jyp', '#9E1B32', '#1A1A1A'],
+  ['kookoo', '#EF7D00', '#1A1A1A'], ['lukko', '#0057A8', '#E30613'], ['pelicans', '#0094D6', '#0E2240'], ['sport', '#C8102E', '#1A1A1A'],
+  ['tappara', '#F26B21', '#003A70'], ['tps', '#2D2D2D', '#9A9A9A'], ['ässät', '#E4002B', '#1A1A1A'], ['espoo', '#1E3A8A', '#F58220'],
+];
+const teamCols = name => { const n = String(name || '').toLowerCase(); return (TEAM_COLORS.find(([k]) => n.includes(k)) || [null, '#6F6F6A', '#B0B0AA']).slice(1); };
+function pairColors(homeName, awayName) {
+  const [h] = teamCols(homeName), [a1, a2] = teamCols(awayName);
+  const rgb = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const dist = (x, y) => Math.hypot(...rgb(x).map((v, i) => v - rgb(y)[i]));
+  return [h, dist(h, a1) >= 110 ? a1 : dist(h, a2) >= 110 ? a2 : '#9A9A94'];
+}
 // Team whose players the report's player cards and tables show (per game; default the focus team)
 const PLAYER_TEAM = new Map();
 const focusName = g => teamNum(g.game.homeTeam.teamId) === focusNum(g) ? g.game.homeTeam.teamName : g.game.awayTeam.teamName;
@@ -541,7 +557,6 @@ async function renderGame(id, box = $('#gameContent')) {
       ${gm ? `<div class="card" id="gmCard"><h2>Joukkueet vastakkain</h2>${gm.html}</div>` : ''}
 
       <div class="periodbar" role="tablist" aria-label="Valitse erä">
-        <span class="seg pteam" role="group" aria-label="Pelaajatilastojen joukkue" data-tip="Kenen pelaajat tähdissä, bonustilastoissa ja pelaajataulukoissa näytetään">${[g.game.homeTeam, g.game.awayTeam].map(x => `<button data-t="${teamNum(x.teamId)}">${esc(x.teamName)}</button>`).join('')}</span>
         <button class="pbtn active" data-p="all">Koko peli</button>
         ${periods.map(n => `<button class="pbtn" data-p="${n}">${PERIOD_LABEL(n)}</button>`).join('')}
       </div>
@@ -553,20 +568,21 @@ async function renderGame(id, box = $('#gameContent')) {
     const gid = String(g.game.id), oppNum = teamNum((home ? g.game.awayTeam : g.game.homeTeam).teamId);
     const fullOpp = analyzeGame(g, st, null, ctx, oppNum);
     let curSel = 'all';
+    const pc = pairColors(g.game.homeTeam.teamName, g.game.awayTeam.teamName);
+    const teamSeg = T => `<span class="seg pteam" role="group" aria-label="Joukkue" data-tip="Kumman joukkueen pelaajat näytetään">${[g.game.homeTeam, g.game.awayTeam].map((x, i) => `<button data-t="${teamNum(x.teamId)}" class="${teamNum(x.teamId) === T ? 'on' : ''}"><i class="tdot" style="background:${pc[i]}"></i>${esc(x.teamName)}</button>`).join('')}</span>`;
     const draw = sel => {
       curSel = sel;
       setShotPeriod(sel === 'all' ? null : Number(sel));
       const T = PLAYER_TEAM.get(gid) === oppNum ? oppNum : full.focus, F0 = T === full.focus ? full : fullOpp;
       const a = sel === 'all' ? F0 : analyzeGame(g, st, Number(sel), ctx, T);
       box.querySelectorAll('.pbtn').forEach(b => b.classList.toggle('active', b.dataset.p === String(sel)));
-      box.querySelectorAll('.pteam button').forEach(b => b.classList.toggle('on', Number(b.dataset.t) === T));
       // Goalie splits read the shots against the team on screen
       GAME_FOCUS = T;
-      drawPeriodContent($('#periodContent', box), a, sel === 'all' ? null : Number(sel), F0);
+      drawPeriodContent($('#periodContent', box), a, sel === 'all' ? null : Number(sel), F0, teamSeg(T));
       GAME_FOCUS = full.focus;
+      box.querySelectorAll('#periodContent .pteam button').forEach(b => b.onclick = () => { PLAYER_TEAM.set(gid, Number(b.dataset.t)); draw(curSel); });
     };
     box.querySelectorAll('.pbtn').forEach(b => b.onclick = () => draw(b.dataset.p));
-    box.querySelectorAll('.pteam button').forEach(b => b.onclick = () => { PLAYER_TEAM.set(gid, Number(b.dataset.t)); draw(curSel); });
     draw('all');
   } catch (e) {
     box.innerHTML = `<p class="neg-num">Ottelun lataus epäonnistui: ${esc(e.message)}</p>`;
@@ -708,7 +724,7 @@ function skaterSets(rows, opt = {}) {
 let SK_SET = 'perus';
 let GK_SET = 'perus';
 let GAME_SM = [];       // shot map of the game on screen (for goalie splits)   // selected stat set in the skater table, kept across period switches
-function drawPeriodContent(el, a, period, full) {
+function drawPeriodContent(el, a, period, full, teamSeg = '') {
   const top = a.people.slice(0, 3);
   const skaters = a.people.filter(p => !p.goalie);
   const goalies = a.people.filter(p => p.goalie);
@@ -723,12 +739,12 @@ function drawPeriodContent(el, a, period, full) {
 
   el.innerHTML = `
     <div class="card live-hide">
-      <h2><span class="tag">${title}</span></h2>
+      <h2><span class="tag">${title}</span>${teamSeg}</h2>
       ${top.length ? `<div class="podium">${top.map((p, i) => mvpCard(p, i)).join('')}</div>${legend()}` : '<p class="muted">Ei dataa tältä erältä.</p>'}
     </div>
 
     <div class="card live-hide">
-      <h2>Bonustilastot${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}</h2>
+      <h2>Bonustilastot${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}${teamSeg}</h2>
       <div class="tiles" data-n="${5 + goalies.length}">
         ${fast?.topSpeed ? tile('⚡', 'Huippuvauhti', num(fast.topSpeed * 3.6, 1), 'km/h', fast, period == null ? '' : 'koko ottelu', '', period == null ? '' : 'Liiga antaa huippuvauhdin vain koko ottelulta, ei eräkohtaisesti') : tile('⚡', 'Huippuvauhti', '–', '', null, 'ei dataa')}
         ${hard?.hardestShot ? tile('💥', 'Laukaus', num(hard.hardestShot * 3.6, 1), 'km/h', hard, period == null ? '' : 'koko ottelu', '', period == null ? '' : 'Liiga antaa laukausnopeuden vain koko ottelulta, ei eräkohtaisesti') : tile('💥', 'Laukaus', '–', '', null, 'ei dataa')}
@@ -740,13 +756,13 @@ function drawPeriodContent(el, a, period, full) {
     </div>
 
     <div class="card">
-      <h2>Kenttäpelaajat${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}</h2>
+      <h2>Kenttäpelaajat${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}${teamSeg}</h2>
       <div class="setbar" id="skSets" role="tablist" aria-label="Tilastot"></div>
       <div class="tablewrap" id="gameTable"></div>
     </div>
 
     <div class="card">
-      <h2>Maalivahdit${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}</h2>
+      <h2>Maalivahdit${period == null ? '' : ` · ${PERIOD_LABEL(period)}`}${teamSeg}</h2>
       <div class="setbar" id="gkSets" role="tablist" aria-label="Maalivahtitilastot"></div>
       <div class="tablewrap" id="gkGameTable"></div>
     </div>`;

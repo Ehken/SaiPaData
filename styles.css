@@ -831,7 +831,7 @@ details.recon[open] { background: #fff; border: 1px solid var(--line); border-ra
 .lv-sec { margin-top: 16px; }
 .lv-sec h3 { display: flex; align-items: center; gap: 10px; }
 .wp-line { fill: none; stroke: var(--ink); stroke-width: 2.5; }
-.wp-area { fill: var(--yellow); opacity: .25; }
+.wp-area { fill: var(--yellow); opacity: .3; }
 .wp-g { fill: #6f6f6a; stroke: #fff; stroke-width: 1.5; } .wp-g.s { fill: var(--yellow); stroke: var(--ink); }
 .wp-p { fill: #9a9a94; } .wp-p.s { fill: #e0a800; }
 /* Pressure: one equal block per minute; colour = who had more attempts that minute (counts in the hover) */
@@ -1163,3 +1163,18 @@ table.gkc .gkc-rk { font-size: 11px; color: var(--muted); font-weight: 500; disp
 .gkc-form i { font-style: normal; font-size: 11px; font-weight: 700; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: #f0f0ec; color: var(--ink-2); }
 .gkc-form i.g { background: #d9f0dc; } .gkc-form i.b { background: #f6dcdc; }
 @media (max-width: 480px) { table.gkc thead th:first-child { width: 92px; } table.gkc td b { min-width: 0; padding: 2px 4px; } }
+
+/* Team colour dots and neutral two-team tiles */
+.tdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+.tile.duo { grid-template-areas: "top top" "v v" "sub sub"; }
+.tile .duo-v { grid-area: v; display: grid; gap: 4px; margin: 10px 0 4px; min-width: 0; }
+.duo-r { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
+.duo-r .tdot { align-self: center; }
+.duo-r .duo-n { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.duo-r b { font-family: "Barlow Condensed", Inter, sans-serif; font-size: 28px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.duo-r small { font-size: 13px; font-weight: 700; color: var(--muted); margin-left: 3px; }
+.wp-leg { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; margin: -4px 0 6px; }
+.wp-leg span { display: inline-flex; align-items: center; }
+.wp-tl { font-weight: 700; font-size: 12px; }
+.card h2 .pteam { margin-left: 12px; font-family: Inter, sans-serif; font-size: 13px; text-transform: none; letter-spacing: 0; vertical-align: middle; }
+.pteam button, .lv-ice-t button { display: inline-flex; align-items: center; }
