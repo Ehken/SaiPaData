@@ -217,13 +217,13 @@ const NO_GOAL = ['VT0', 'RL0'];
 const validGoal = e => !(e.goalTypes || []).some(t => NO_GOAL.includes(t)) && (e.period || 0) <= 4;
 const SAIPA_NUM = Number(SAIPA);
 // Whose point of view a game is analysed from: SaiPa in SaiPa's games, otherwise the home team (live view of
-// other games). Shared by the game report, the live view and the shot map.
+// other games, shown neutrally). Shared by the game report, the live view and the shot map.
 const focusNum = g => {
   const h = teamNum(g.game.homeTeam.teamId), a = teamNum(g.game.awayTeam.teamId);
-  if (h === SAIPA_NUM || a === SAIPA_NUM) return SAIPA_NUM;
-  const pick = typeof FOCUS_PICK !== 'undefined' ? FOCUS_PICK.get(String(g.game.id)) : null;   // live view's team switch
-  return pick === a ? a : h;
+  return h === SAIPA_NUM || a === SAIPA_NUM ? SAIPA_NUM : h;
 };
+// Team whose players the report's player cards and tables show (per game; default the focus team)
+const PLAYER_TEAM = new Map();
 const focusName = g => teamNum(g.game.homeTeam.teamId) === focusNum(g) ? g.game.homeTeam.teamName : g.game.awayTeam.teamName;
 let GAME_FOCUS = SAIPA_NUM;   // focus team of the game report on screen (set by renderGame)
 const isSog = s => s.eventType === 'GOAL' || s.eventType === 'GOALIE_BLOCKED';
@@ -541,6 +541,7 @@ async function renderGame(id, box = $('#gameContent')) {
       ${gm ? `<div class="card" id="gmCard"><h2>Joukkueet vastakkain</h2>${gm.html}</div>` : ''}
 
       <div class="periodbar" role="tablist" aria-label="Valitse erä">
+        <span class="seg pteam" role="group" aria-label="Pelaajatilastojen joukkue" data-tip="Kenen pelaajat tähdissä, bonustilastoissa ja pelaajataulukoissa näytetään">${[g.game.homeTeam, g.game.awayTeam].map(x => `<button data-t="${teamNum(x.teamId)}">${esc(x.teamName)}</button>`).join('')}</span>
         <button class="pbtn active" data-p="all">Koko peli</button>
         ${periods.map(n => `<button class="pbtn" data-p="${n}">${PERIOD_LABEL(n)}</button>`).join('')}
       </div>
@@ -548,13 +549,24 @@ async function renderGame(id, box = $('#gameContent')) {
 
     if (gm) { const el = $('#gmCard', box); if (el) whenVisible(el, () => gm.fill(el)); }
     const setShotPeriod = initShotMap(box, ctx.sm, g, full.opp.teamName);
+    // Player cards and tables can show either team; the rest of the report keeps the focus team's view
+    const gid = String(g.game.id), oppNum = teamNum((home ? g.game.awayTeam : g.game.homeTeam).teamId);
+    const fullOpp = analyzeGame(g, st, null, ctx, oppNum);
+    let curSel = 'all';
     const draw = sel => {
+      curSel = sel;
       setShotPeriod(sel === 'all' ? null : Number(sel));
-      const a = sel === 'all' ? full : analyzeGame(g, st, Number(sel), ctx);
+      const T = PLAYER_TEAM.get(gid) === oppNum ? oppNum : full.focus, F0 = T === full.focus ? full : fullOpp;
+      const a = sel === 'all' ? F0 : analyzeGame(g, st, Number(sel), ctx, T);
       box.querySelectorAll('.pbtn').forEach(b => b.classList.toggle('active', b.dataset.p === String(sel)));
-      drawPeriodContent($('#periodContent'), a, sel === 'all' ? null : Number(sel), full);
+      box.querySelectorAll('.pteam button').forEach(b => b.classList.toggle('on', Number(b.dataset.t) === T));
+      // Goalie splits read the shots against the team on screen
+      GAME_FOCUS = T;
+      drawPeriodContent($('#periodContent', box), a, sel === 'all' ? null : Number(sel), F0);
+      GAME_FOCUS = full.focus;
     };
     box.querySelectorAll('.pbtn').forEach(b => b.onclick = () => draw(b.dataset.p));
+    box.querySelectorAll('.pteam button').forEach(b => b.onclick = () => { PLAYER_TEAM.set(gid, Number(b.dataset.t)); draw(curSel); });
     draw('all');
   } catch (e) {
     box.innerHTML = `<p class="neg-num">Ottelun lataus epäonnistui: ${esc(e.message)}</p>`;
